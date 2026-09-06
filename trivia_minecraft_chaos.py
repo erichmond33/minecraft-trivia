@@ -9,13 +9,17 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import json
 import getpass
+import os
 import random
 import re
 import socket
 import struct
 import sys
 import time
+import urllib.error
+import urllib.request
 from typing import Callable
 
 
@@ -46,7 +50,7 @@ class Question:
     note: str = ""
 
 
-QUESTION_BANK: list[Question] = [
+LOCAL_QUESTION_BANK: list[Question] = [
     Question("What color is the sky on a clear day?", ("blue",), 1),
     Question("How many legs does a spider have?", ("8", "eight"), 1),
     Question("What planet do humans live on?", ("earth",), 1),
@@ -108,6 +112,89 @@ QUESTION_BANK: list[Question] = [
     Question("What is the name of the smallest named Graham's number-style up-arrow operation using Knuth notation for 3 up-arrow 3?", ("tetration",), 10),
     Question("In Minecraft Java, what NBT tag controls whether a mob can pick up loot?", ("canpickuploot",), 10),
 ]
+
+
+@dataclasses.dataclass(frozen=True)
+class Judgement:
+    correct: bool
+    message: str
+    expected_answer: str
+
+
+def load_dotenv(path: str = ".env") -> None:
+    if not os.path.exists(path):
+        return
+    with open(path, "r", encoding="utf-8") as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            os.environ.setdefault(key, value)
+
+
+def get_gemini_key() -> str | None:
+    for key_name in ("GEMINI_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        value = os.environ.get(key_name)
+        if value:
+            return value
+    return None
+
+
+def extract_json_object(text: str) -> dict[str, object]:
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
+        stripped = re.sub(r"\s*```$", "", stripped)
+    start = stripped.find("{")
+    end = stripped.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError(f"Gemini did not return a JSON object: {text[:200]}")
+    loaded = json.loads(stripped[start : end + 1])
+    if not isinstance(loaded, dict):
+        raise ValueError("Gemini returned JSON, but it was not an object.")
+    return loaded
+
+
+class GeminiClient:
+    def __init__(self, api_key: str, model: str, timeout: float = 30.0) -> None:
+        self.api_key = api_key
+        self.model = model
+        self.timeout = timeout
+
+    def generate(self, prompt: str) -> str:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.7,
+                "topP": 0.9,
+                "maxOutputTokens": 600,
+                "responseMimeType": "application/json",
+            },
+        }
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "x-goog-api-key": self.api_key},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Gemini HTTP {error.code}: {body[:400]}") from error
+        except urllib.error.URLError as error:
+            raise RuntimeError(f"Could not reach Gemini: {error.reason}") from error
+
+        try:
+            parts = data["candidates"][0]["content"]["parts"]
+            return "".join(part.get("text", "") for part in parts)
+        except (KeyError, IndexError, TypeError) as error:
+            raise RuntimeError(f"Unexpected Gemini response: {json.dumps(data)[:400]}") from error
 
 
 def normalize_answer(value: str) -> str:
@@ -227,6 +314,46 @@ class MinecraftChaos:
             ("Snowball knockback storm", self.snowball_storm),
             ("Suspicious stew roulette", self.suspicious_stew),
             ("Chunk bite, not chunk delete", self.chunk_bite),
+            ("Charged creeper cameo", self.charged_creepers),
+            ("Zombie office party", self.zombie_party),
+            ("Skeleton firing squad", self.skeleton_squad),
+            ("Pillager pop quiz", self.pillagers),
+            ("Vex paperwork", self.vexes),
+            ("Ravager surprise", self.ravager),
+            ("Blaze drill", self.blazes),
+            ("Magma cube bounce house", self.magma_cubes),
+            ("Slime audit", self.slimes),
+            ("Endermite ankle biters", self.endermites),
+            ("Hoglin hallway", self.hoglins),
+            ("Zoglin chaos", self.zoglin),
+            ("Guardian laser pointer", self.guardians),
+            ("Elder guardian tax", self.elder_guardian_curse),
+            ("Arrow rain", self.arrow_rain),
+            ("Trident rain", self.trident_rain),
+            ("Egg storm", self.egg_storm),
+            ("Chicken flood", self.chicken_flood),
+            ("Bat cave mode", self.bats),
+            ("Rabbit distraction", self.rabbits),
+            ("Cod flop", self.cod_flop),
+            ("Goat headbutt convention", self.goats),
+            ("Cobweb trap", self.cobweb_trap),
+            ("Ice cube prison", self.ice_prison),
+            ("Glass timeout box", self.glass_box),
+            ("Dirt timeout box", self.dirt_box),
+            ("Waterlogged boots", self.water_cube),
+            ("Lava moat", self.lava_moat),
+            ("Powder snow pocket", self.powder_snow),
+            ("Soul sand stumble field", self.soul_sand_field),
+            ("Cactus hug circle", self.cactus_circle),
+            ("Berry bush inconvenience", self.berry_bushes),
+            ("Hunger pang", self.hunger),
+            ("Poison nibble", self.poison),
+            ("Wither warning", self.wither_warning),
+            ("Levitation oops", self.levitation),
+            ("Glow of shame", self.glowing),
+            ("Thunderstorm button", self.thunderstorm),
+            ("Night shift", self.night_shift),
+            ("Rotten flesh consolation prize", self.rotten_flesh),
         ]
 
     def announce(self, text: str) -> None:
@@ -262,6 +389,20 @@ class MinecraftChaos:
 
     def as_target(self, command: str) -> str:
         return f"execute as {self.target} at @s run {command}"
+
+    def summon_many(self, entity: str, count: int, radius: int = 6, y: str = "~", nbt: str = "") -> list[str]:
+        return [
+            self.at_target(
+                f"summon minecraft:{entity} ~{random.randint(-radius, radius)} {y} ~{random.randint(-radius, radius)} {nbt}".strip()
+            )
+            for _ in range(count)
+        ]
+
+    def fill_nearby(self, xz_radius: int, y1: int, y2: int, block: str, replace: str | None = None) -> str:
+        command = f"fill ~-{xz_radius} ~{y1} ~-{xz_radius} ~{xz_radius} ~{y2} ~{xz_radius} minecraft:{block}"
+        if replace:
+            command += f" replace minecraft:{replace}"
+        return self.at_target(command)
 
     def duplicate_nearby_hostiles(self) -> list[str]:
         count = self.mob_wave_size
@@ -351,8 +492,144 @@ class MinecraftChaos:
             self.at_target("fill ~-3 ~-2 ~-3 ~3 ~3 ~3 minecraft:air replace minecraft:deepslate"),
         ]
 
+    def charged_creepers(self) -> list[str]:
+        return self.summon_many("creeper", 6, 7, "~", "{powered:1b,Fuse:50}")
 
-class AdaptiveTriviaAgent:
+    def zombie_party(self) -> list[str]:
+        return self.summon_many("zombie", 24, 8)
+
+    def skeleton_squad(self) -> list[str]:
+        return self.summon_many("skeleton", 14, 8)
+
+    def pillagers(self) -> list[str]:
+        return self.summon_many("pillager", 8, 9)
+
+    def vexes(self) -> list[str]:
+        return self.summon_many("vex", 7, 5)
+
+    def ravager(self) -> list[str]:
+        return self.summon_many("ravager", 1, 5)
+
+    def blazes(self) -> list[str]:
+        return self.summon_many("blaze", 8, 7)
+
+    def magma_cubes(self) -> list[str]:
+        return self.summon_many("magma_cube", 8, 7, "~", "{Size:3}")
+
+    def slimes(self) -> list[str]:
+        return self.summon_many("slime", 10, 7, "~", "{Size:3}")
+
+    def endermites(self) -> list[str]:
+        return self.summon_many("endermite", 20, 5)
+
+    def hoglins(self) -> list[str]:
+        return self.summon_many("hoglin", 4, 7)
+
+    def zoglin(self) -> list[str]:
+        return self.summon_many("zoglin", 1, 5)
+
+    def guardians(self) -> list[str]:
+        return self.summon_many("guardian", 5, 6)
+
+    def elder_guardian_curse(self) -> list[str]:
+        return [f"effect give {self.target} minecraft:mining_fatigue 60 3 true"]
+
+    def arrow_rain(self) -> list[str]:
+        return self.summon_many("arrow", 30, 5, "~10", "{Motion:[0.0,-1.2,0.0]}")
+
+    def trident_rain(self) -> list[str]:
+        return self.summon_many("trident", 12, 5, "~10", "{Motion:[0.0,-1.3,0.0]}")
+
+    def egg_storm(self) -> list[str]:
+        return self.summon_many("egg", 28, 5, "~5", "{Motion:[0.0,-0.8,0.0]}")
+
+    def chicken_flood(self) -> list[str]:
+        return self.summon_many("chicken", 32, 8)
+
+    def bats(self) -> list[str]:
+        return self.summon_many("bat", 28, 5, "~2")
+
+    def rabbits(self) -> list[str]:
+        return self.summon_many("rabbit", 18, 7)
+
+    def cod_flop(self) -> list[str]:
+        return self.summon_many("cod", 18, 5, "~1")
+
+    def goats(self) -> list[str]:
+        return self.summon_many("goat", 8, 7)
+
+    def cobweb_trap(self) -> list[str]:
+        return [self.fill_nearby(2, 0, 2, "cobweb", "air")]
+
+    def ice_prison(self) -> list[str]:
+        return [
+            self.fill_nearby(2, -1, 3, "packed_ice", "air"),
+            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
+        ]
+
+    def glass_box(self) -> list[str]:
+        return [
+            self.fill_nearby(2, -1, 3, "glass", "air"),
+            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
+        ]
+
+    def dirt_box(self) -> list[str]:
+        return [
+            self.fill_nearby(2, -1, 3, "dirt", "air"),
+            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
+        ]
+
+    def water_cube(self) -> list[str]:
+        return [self.fill_nearby(2, 0, 2, "water", "air")]
+
+    def lava_moat(self) -> list[str]:
+        return [
+            self.at_target("fill ~-4 ~-1 ~-4 ~4 ~-1 ~4 minecraft:lava replace minecraft:air"),
+            self.at_target("fill ~-2 ~-1 ~-2 ~2 ~-1 ~2 minecraft:air replace minecraft:lava"),
+        ]
+
+    def powder_snow(self) -> list[str]:
+        return [self.fill_nearby(2, 0, 2, "powder_snow", "air")]
+
+    def soul_sand_field(self) -> list[str]:
+        return [self.fill_nearby(4, -1, -1, "soul_sand")]
+
+    def cactus_circle(self) -> list[str]:
+        offsets = [(-3, 0), (3, 0), (0, -3), (0, 3), (-2, -2), (2, 2), (-2, 2), (2, -2)]
+        return [self.at_target(f"setblock ~{x} ~ ~{z} minecraft:cactus") for x, z in offsets]
+
+    def berry_bushes(self) -> list[str]:
+        return [self.at_target(f"setblock ~{random.randint(-3, 3)} ~ ~{random.randint(-3, 3)} minecraft:sweet_berry_bush") for _ in range(16)]
+
+    def hunger(self) -> list[str]:
+        return [f"effect give {self.target} minecraft:hunger 35 3 true"]
+
+    def poison(self) -> list[str]:
+        return [f"effect give {self.target} minecraft:poison 12 1 true"]
+
+    def wither_warning(self) -> list[str]:
+        return [f"effect give {self.target} minecraft:wither 8 0 true"]
+
+    def levitation(self) -> list[str]:
+        return [
+            f"effect give {self.target} minecraft:levitation 6 1 true",
+            f"effect give {self.target} minecraft:slow_falling 10 0 true",
+        ]
+
+    def glowing(self) -> list[str]:
+        return [f"effect give {self.target} minecraft:glowing 60 0 true"]
+
+    def thunderstorm(self) -> list[str]:
+        return ["weather thunder 45"]
+
+    def night_shift(self) -> list[str]:
+        return ["time set midnight"]
+
+    def rotten_flesh(self) -> list[str]:
+        return [f"give {self.target} minecraft:rotten_flesh 16"]
+
+
+class LocalTriviaAgent:
     def __init__(self, questions: list[Question]) -> None:
         self.questions = questions
         self.asked: set[str] = set()
@@ -385,6 +662,97 @@ class AdaptiveTriviaAgent:
             return
         self.streak = 0
 
+    def judge_answer(self, question: Question, user_answer: str) -> Judgement:
+        correct = answer_matches(user_answer, question.answers)
+        return Judgement(
+            correct=correct,
+            message="Correct." if correct else "Wrong.",
+            expected_answer=", ".join(question.answers[:2]),
+        )
+
+
+class GeminiTriviaAgent:
+    def __init__(self, client: GeminiClient, category: str) -> None:
+        self.client = client
+        self.category = category
+        self.streak = 0
+        self.turn = 0
+        self.difficulty = 1
+        self.history: list[str] = []
+
+    def next_question(self) -> Question:
+        self.turn += 1
+        if self.turn % 3 == 0 and self.difficulty < 10:
+            self.difficulty += 1
+
+        prompt = f"""
+You are running a Minecraft trivia challenge.
+Create exactly one general trivia question in the requested difficulty.
+
+Difficulty scale:
+1 = extremely easy for almost anyone.
+3 = easy school/common knowledge.
+5 = medium pub trivia.
+7 = hard.
+10 = ridiculously hard but still objectively answerable.
+
+Requirements:
+- Category preference: {self.category}
+- Current difficulty: {self.difficulty}/10
+- Avoid repeating these recent questions: {self.history[-12:]}
+- Make the question concise.
+- The answer must be a short factual answer.
+- Return only JSON with keys: question, expected_answer, difficulty.
+"""
+        try:
+            data = extract_json_object(self.client.generate(prompt))
+        except ValueError as error:
+            raise RuntimeError(str(error)) from error
+        question_text = str(data.get("question", "")).strip()
+        expected_answer = str(data.get("expected_answer", "")).strip()
+        if not question_text or not expected_answer:
+            raise RuntimeError(f"Gemini produced an incomplete question: {data}")
+        try:
+            difficulty = int(data.get("difficulty", self.difficulty))
+        except (TypeError, ValueError):
+            difficulty = self.difficulty
+        difficulty = min(max(difficulty, 1), 10)
+        self.history.append(question_text)
+        return Question(question_text, (expected_answer,), difficulty)
+
+    def judge_answer(self, question: Question, user_answer: str) -> Judgement:
+        prompt = f"""
+You are judging a trivia answer for a Minecraft punishment game.
+
+Question: {question.prompt}
+Expected answer: {question.answers[0]}
+Player answer: {user_answer}
+
+Judge generously for spelling, capitalization, abbreviations, and equivalent wording.
+Do not accept a joke answer, contradiction, or answer that is merely related.
+Return only JSON with keys:
+- correct: boolean
+- message: one short sentence for the player
+- expected_answer: the canonical correct answer
+"""
+        try:
+            data = extract_json_object(self.client.generate(prompt))
+        except ValueError as error:
+            raise RuntimeError(str(error)) from error
+        correct = bool(data.get("correct", False))
+        message = str(data.get("message", "Correct." if correct else "Wrong.")).strip()
+        expected_answer = str(data.get("expected_answer", question.answers[0])).strip()
+        return Judgement(correct=correct, message=message, expected_answer=expected_answer)
+
+    def record_answer(self, correct: bool) -> None:
+        if correct:
+            self.streak += 1
+            if self.streak >= 4 and self.difficulty < 10:
+                self.difficulty += 1
+                self.streak = 0
+            return
+        self.streak = 0
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Minecraft trivia chaos via RCON.")
@@ -395,6 +763,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--questions", type=int, default=25, help="Number of trivia questions to ask.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands instead of connecting to Minecraft.")
     parser.add_argument("--seed", type=int, help="Random seed for repeatable testing.")
+    parser.add_argument("--env-file", default=".env", help="Path to .env file containing GEMINI_KEY.")
+    parser.add_argument("--gemini-model", default="gemini-3.7-flash", help="Gemini model used for question generation and judging.")
+    parser.add_argument("--category", default="general trivia", help="Question category preference.")
+    parser.add_argument("--offline-questions", action="store_true", help="Use the built-in question bank instead of Gemini.")
     return parser.parse_args()
 
 
@@ -411,6 +783,19 @@ def main() -> int:
     args = parse_args()
     if args.seed is not None:
         random.seed(args.seed)
+    load_dotenv(args.env_file)
+
+    if args.offline_questions:
+        agent: LocalTriviaAgent | GeminiTriviaAgent = LocalTriviaAgent(LOCAL_QUESTION_BANK)
+    else:
+        gemini_key = get_gemini_key()
+        if not gemini_key:
+            print(
+                "Missing Gemini API key. Add GEMINI_KEY=... to .env or run with --offline-questions.",
+                file=sys.stderr,
+            )
+            return 2
+        agent = GeminiTriviaAgent(GeminiClient(gemini_key, args.gemini_model), category=args.category)
 
     try:
         send_command, client = make_command_sender(args)
@@ -422,26 +807,32 @@ def main() -> int:
         return 2
 
     chaos = MinecraftChaos(send_command=send_command, target=args.target, dry_run=args.dry_run)
-    agent = AdaptiveTriviaAgent(QUESTION_BANK)
 
     try:
-        chaos.announce("Trivia chaos is live. Wrong answers roll random punishments.")
+        chaos.announce("AI trivia chaos is live. Wrong answers roll random punishments.")
         for index in range(1, args.questions + 1):
-            question = agent.next_question()
+            try:
+                question = agent.next_question()
+            except RuntimeError as error:
+                print(f"Could not generate question: {error}", file=sys.stderr)
+                return 2
             print(f"\nQuestion {index}/{args.questions} | Difficulty {agent.difficulty}/10")
             print(question.prompt)
             user_answer = input("> ")
             if user_answer.strip().lower() in {"quit", "exit"}:
                 chaos.announce("Trivia chaos ended early.")
                 break
-            correct = answer_matches(user_answer, question.answers)
-            agent.record_answer(correct)
-            if correct:
-                print("Correct.")
+            try:
+                judgement = agent.judge_answer(question, user_answer)
+            except RuntimeError as error:
+                print(f"Could not judge answer: {error}", file=sys.stderr)
+                return 2
+            agent.record_answer(judgement.correct)
+            print(judgement.message)
+            if judgement.correct:
                 chaos.reward()
             else:
-                accepted = ", ".join(question.answers[:2])
-                print(f"Wrong. Accepted answer: {accepted}")
+                print(f"Expected answer: {judgement.expected_answer}")
                 punishment = chaos.punish()
                 print(f"Punishment: {punishment}")
         chaos.announce("Trivia chaos complete.")

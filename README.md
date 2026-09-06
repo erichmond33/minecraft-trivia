@@ -1,6 +1,16 @@
 # Minecraft Trivia Chaos
 
-`trivia_minecraft_chaos.py` runs a terminal trivia game and talks to a local Minecraft Java server through RCON. Correct answers get a short in-game message. Wrong answers roll one of 20 random punishments.
+`trivia_minecraft_chaos.py` runs a terminal trivia game and talks to a local Minecraft Java server through RCON. Gemini creates each question in real time and judges whether the answer is correct. Correct answers get a short in-game message. Wrong answers roll one of 60 random punishments.
+
+## Gemini Setup
+
+Put your Gemini API key in `.env`:
+
+```properties
+GEMINI_KEY=your-api-key
+```
+
+The script also accepts `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 
 ## Minecraft Setup
 
@@ -22,6 +32,12 @@ Test without connecting to Minecraft:
 python3 trivia_minecraft_chaos.py --dry-run --questions 5
 ```
 
+That still uses Gemini. To test completely offline with the old built-in question bank:
+
+```bash
+python3 trivia_minecraft_chaos.py --dry-run --offline-questions --questions 5
+```
+
 Run against a local server:
 
 ```bash
@@ -33,6 +49,8 @@ Useful options:
 - `--target @p` punishes only the nearest player.
 - `--target PlayerName` punishes one player by name.
 - `--questions 50` changes the session length.
+- `--category "Minecraft and science"` nudges Gemini toward a category.
+- `--gemini-model gemini-3.7-flash` changes the model.
 - `--host` and `--port` point at a non-default RCON server.
 
 ## Punishments Included
@@ -59,6 +77,46 @@ The script rolls randomly from these:
 18. Snowball storm
 19. Suspicious stew
 20. Chunk bite, which clears a small local block pocket instead of deleting a whole chunk
+21. Charged creepers
+22. Zombie office party
+23. Skeleton firing squad
+24. Pillager pop quiz
+25. Vex paperwork
+26. Ravager surprise
+27. Blaze drill
+28. Magma cube bounce house
+29. Slime audit
+30. Endermite ankle biters
+31. Hoglin hallway
+32. Zoglin chaos
+33. Guardian laser pointer
+34. Elder guardian mining fatigue
+35. Arrow rain
+36. Trident rain
+37. Egg storm
+38. Chicken flood
+39. Bat cave mode
+40. Rabbit distraction
+41. Cod flop
+42. Goat convention
+43. Cobweb trap
+44. Ice cube prison
+45. Glass timeout box
+46. Dirt timeout box
+47. Waterlogged boots
+48. Lava moat
+49. Powder snow pocket
+50. Soul sand stumble field
+51. Cactus circle
+52. Sweet berry bush inconvenience
+53. Hunger
+54. Poison
+55. Wither warning
+56. Levitation
+57. Glow of shame
+58. Thunderstorm
+59. Night shift
+60. Rotten flesh consolation prize
 
 I intentionally made the chunk punishment limited. Deleting an actual chunk is better done with a server plugin or world editor and is too easy to make permanently destructive by accident.
 
