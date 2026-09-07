@@ -14,13 +14,22 @@ The script also accepts `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 
 ## Ollama Setup
 
-For Ollama Cloud, put your API key in `.env`:
+By default, Ollama behaves like the official Python client and talks to your local Ollama daemon. These `.env` values are supported:
 
 ```properties
+OLLAMA_MODEL=llama3.2:1b
+OLLAMA_HOST=http://localhost:11434
+```
+
+For Ollama Cloud, use:
+
+```properties
+OLLAMA_CLOUD=true
+OLLAMA_MODEL=gpt-oss:120b
 OLLAMA_API_KEY=your-api-key
 ```
 
-Ollama Cloud uses `https://ollama.com/api/chat`. Local Ollama can also be used with `--ollama-host http://localhost:11434`.
+You can also pass `--ollama-cloud`, which sets the host to `https://ollama.com`.
 
 ## Minecraft Setup
 
@@ -60,22 +69,22 @@ Run against a local server with Gemini:
 python3 trivia_minecraft_chaos.py --password change-this-password --target @a
 ```
 
+Run against a local server with local Ollama:
+
+```bash
+python3 trivia_minecraft_chaos.py --llm-provider ollama --password change-this-password --target @a
+```
+
 Run against a local server with Ollama Cloud:
 
 ```bash
-python3 trivia_minecraft_chaos.py --llm-provider ollama --ollama-model gpt-oss:120b --password change-this-password --target @a
+python3 trivia_minecraft_chaos.py --llm-provider ollama --ollama-cloud --ollama-model gpt-oss:120b --password change-this-password --target @a
 ```
 
-Check Ollama Cloud auth before starting the game:
+Check the selected Ollama setup before starting the game:
 
 ```bash
-python3 trivia_minecraft_chaos.py --llm-provider ollama --check-llm-auth --llm-insecure-skip-verify
-```
-
-Run with local Ollama:
-
-```bash
-python3 trivia_minecraft_chaos.py --llm-provider ollama --ollama-host http://localhost:11434 --ollama-model llama3.1 --password change-this-password --target @a
+python3 trivia_minecraft_chaos.py --llm-provider ollama --check-llm-auth
 ```
 
 Useful options:
@@ -89,8 +98,9 @@ Useful options:
 - `--category "Minecraft and science"` nudges the LLM toward a category.
 - `--llm-provider ollama` uses Ollama instead of Gemini.
 - `--gemini-model gemini-3.7-flash` changes the model.
-- `--ollama-model gpt-oss:120b` changes the Ollama model.
-- `--ollama-host https://ollama.com` changes the Ollama API host.
+- `--ollama-model gpt-oss:120b` changes the Ollama model. Defaults to `OLLAMA_MODEL` or `llama3.2:1b`.
+- `--ollama-host http://localhost:11434` changes the Ollama host.
+- `--ollama-cloud` uses Ollama Cloud at `https://ollama.com`.
 - `--llm-ca-file /path/to/cacert.pem` points Python at a CA bundle if HTTPS certificate verification fails.
 - `--llm-insecure-skip-verify` disables LLM HTTPS certificate verification for local testing.
 - `--host` and `--port` point at a non-default RCON server.
