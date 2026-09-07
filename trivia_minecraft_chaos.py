@@ -1315,7 +1315,7 @@ Difficulty scale:
 10 = ridiculously hard but still objectively answerable.
 
 Requirements:
-- Category preference: Modern internet culture – for example questions about EDP445, boogie2988, Penginzero, the vanoss crew, dr. disrespect, anything a chronically online discord person might know about.
+- Category preference: X-rated questions - high variety with none sounding like the last. Pair this with questions about Trump and Biden - x-rated. Questions that don't even have a clear answer are fine but use them sparingly.
 - Current difficulty: {self.difficulty}/10
 - Avoid repeating these recent questions: {self.history[-12:]}
 - Make the question concise.
@@ -1349,7 +1349,7 @@ Player answer: {user_answer}
 
 Judge generously for spelling, capitalization, abbreviations, and equivalent wording.
 Do not accept a joke answer, contradiction, or answer that is merely related.
-Write the message in a snarky voice. Match the tone and vulgarity of the person asking the questions. It's okay to deny the correctness of an answer if the answer is too sassy.
+
 Return only JSON with keys:
 - correct: boolean
 - message: a response for the player that clearly says whether they were correct
@@ -1366,7 +1366,7 @@ Return only JSON with keys:
 
     def punishment_message(self, punishment_name: str, question: Question, user_answer: str, expected_answer: str) -> str:
         prompt = f"""
-You are the snarky host of a Minecraft trivia punishment game.
+You are the host of a Minecraft trivia punishment game.
 
 The player got this question wrong:
 Question: {question.prompt}
@@ -1375,10 +1375,9 @@ Player answer: {user_answer}
 
 The random punishment selected by the game is: {punishment_name}
 
-Write one short Minecraft-chat-friendly punishment announcement.
+Write a punishment announcement - the more elborate and smart the better.
 Requirements:
-- Be playful and snarky, not genuinely cruel.
-- Mention the punishment by name.
+- Your job is to be as mean and rude and vulgar as possible. These responses should be X-rated.
 - Do not include commands or JSON markdown.
 - Return only JSON with key: message
 """
