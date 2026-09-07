@@ -15,6 +15,7 @@ import os
 import random
 import re
 import socket
+import ssl
 import struct
 import sys
 import time
@@ -27,6 +28,7 @@ SERVERDATA_AUTH = 3
 SERVERDATA_AUTH_RESPONSE = 2
 SERVERDATA_EXECCOMMAND = 2
 SERVERDATA_RESPONSE_VALUE = 0
+STARTING_DIFFICULTY = 4
 
 
 HOSTILE_MOBS = [
@@ -159,10 +161,19 @@ def extract_json_object(text: str) -> dict[str, object]:
 
 
 class GeminiClient:
-    def __init__(self, api_key: str, model: str, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        timeout: float = 30.0,
+        ca_file: str | None = None,
+        insecure_skip_verify: bool = False,
+    ) -> None:
         self.api_key = api_key
         self.model = model
         self.timeout = timeout
+        self.ca_file = ca_file
+        self.insecure_skip_verify = insecure_skip_verify
 
     def generate(self, prompt: str) -> str:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
@@ -181,20 +192,35 @@ class GeminiClient:
             headers={"Content-Type": "application/json", "x-goog-api-key": self.api_key},
             method="POST",
         )
+        context = self._ssl_context()
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(request, timeout=self.timeout, context=context) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"Gemini HTTP {error.code}: {body[:400]}") from error
         except urllib.error.URLError as error:
-            raise RuntimeError(f"Could not reach Gemini: {error.reason}") from error
+            reason = str(error.reason)
+            if "CERTIFICATE_VERIFY_FAILED" in reason:
+                reason += (
+                    ". Your Python install cannot find trusted CA certificates. "
+                    "Fix the local certificate store, pass --gemini-ca-file, or use "
+                    "--gemini-insecure-skip-verify for local testing."
+                )
+            raise RuntimeError(f"Could not reach Gemini: {reason}") from error
 
         try:
             parts = data["candidates"][0]["content"]["parts"]
             return "".join(part.get("text", "") for part in parts)
         except (KeyError, IndexError, TypeError) as error:
             raise RuntimeError(f"Unexpected Gemini response: {json.dumps(data)[:400]}") from error
+
+    def _ssl_context(self) -> ssl.SSLContext:
+        if self.insecure_skip_verify:
+            return ssl._create_unverified_context()
+        if self.ca_file:
+            return ssl.create_default_context(cafile=self.ca_file)
+        return ssl.create_default_context()
 
 
 def normalize_answer(value: str) -> str:
@@ -635,7 +661,7 @@ class LocalTriviaAgent:
         self.asked: set[str] = set()
         self.streak = 0
         self.turn = 0
-        self.difficulty = 1
+        self.difficulty = STARTING_DIFFICULTY
 
     def next_question(self) -> Question:
         self.turn += 1
@@ -677,7 +703,7 @@ class GeminiTriviaAgent:
         self.category = category
         self.streak = 0
         self.turn = 0
-        self.difficulty = 1
+        self.difficulty = STARTING_DIFFICULTY
         self.history: list[str] = []
 
     def next_question(self) -> Question:
@@ -686,7 +712,7 @@ class GeminiTriviaAgent:
             self.difficulty += 1
 
         prompt = f"""
-You are running a Minecraft trivia challenge.
+You are running a trivia challenge.
 Create exactly one general trivia question in the requested difficulty.
 
 Difficulty scale:
@@ -754,20 +780,23 @@ Return only JSON with keys:
         self.streak = 0
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Minecraft trivia chaos via RCON.")
     parser.add_argument("--host", default="127.0.0.1", help="Minecraft RCON host.")
     parser.add_argument("--port", type=int, default=25575, help="Minecraft RCON port.")
     parser.add_argument("--password", help="Minecraft RCON password. Prompts if omitted.")
     parser.add_argument("--target", default="@a", help="Minecraft target selector, e.g. @a, @p, or a username.")
-    parser.add_argument("--questions", type=int, default=25, help="Number of trivia questions to ask.")
+    parser.add_argument("--questions", type=int, default=100, help="Number of trivia questions to ask.")
+    parser.add_argument("--delay-seconds", type=float, default=180.0, help="Seconds to wait between questions.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands instead of connecting to Minecraft.")
     parser.add_argument("--seed", type=int, help="Random seed for repeatable testing.")
     parser.add_argument("--env-file", default=".env", help="Path to .env file containing GEMINI_KEY.")
     parser.add_argument("--gemini-model", default="gemini-3.7-flash", help="Gemini model used for question generation and judging.")
+    parser.add_argument("--gemini-ca-file", help="Path to a CA bundle if Python cannot verify HTTPS certificates.")
+    parser.add_argument("--gemini-insecure-skip-verify", action="store_true", help="Disable Gemini HTTPS certificate verification for local testing.")
     parser.add_argument("--category", default="general trivia", help="Question category preference.")
     parser.add_argument("--offline-questions", action="store_true", help="Use the built-in question bank instead of Gemini.")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def make_command_sender(args: argparse.Namespace) -> tuple[Callable[[str], str], RconClient | None]:
@@ -795,7 +824,15 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 2
-        agent = GeminiTriviaAgent(GeminiClient(gemini_key, args.gemini_model), category=args.category)
+        agent = GeminiTriviaAgent(
+            GeminiClient(
+                gemini_key,
+                args.gemini_model,
+                ca_file=args.gemini_ca_file,
+                insecure_skip_verify=args.gemini_insecure_skip_verify,
+            ),
+            category=args.category,
+        )
 
     try:
         send_command, client = make_command_sender(args)
@@ -835,6 +872,9 @@ def main() -> int:
                 print(f"Expected answer: {judgement.expected_answer}")
                 punishment = chaos.punish()
                 print(f"Punishment: {punishment}")
+            if index < args.questions and args.delay_seconds > 0:
+                print(f"Waiting {args.delay_seconds:g} seconds before the next question...")
+                time.sleep(args.delay_seconds)
         chaos.announce("Trivia chaos complete.")
     finally:
         if client is not None:
