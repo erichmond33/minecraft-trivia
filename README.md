@@ -1,6 +1,6 @@
 # Minecraft Trivia Chaos
 
-`trivia_minecraft_chaos.py` runs a Minecraft chat trivia game through RCON and the server log. An LLM creates each question in real time and judges whether the answer is correct. The LLM's judgement message is posted back to chat. Wrong answers roll one of 60 random punishments.
+`trivia_minecraft_chaos.py` runs a Minecraft chat trivia game through RCON and the server log. An LLM creates each question in real time, judges whether the answer is correct, and writes the snarky chat response. Wrong answers roll one of 60 random punishments, then the LLM writes the punishment announcement too.
 
 ## Gemini Setup
 

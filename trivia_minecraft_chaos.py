@@ -550,15 +550,26 @@ class MinecraftChaos:
         for line in split_chat_message(text):
             self.run(f"say {line}")
 
-    def punish(self) -> str:
+    def punish(self, announcement: str | None = None) -> str:
         self.wrong_answers += 1
         name, command_factory = random.choice(self.punishments)
         commands = command_factory()
-        self.announce(f"Wrong answer. Punishment rolled: {name}.")
+        if announcement:
+            self.announce(announcement)
         for command in commands:
             self.run(command)
             time.sleep(0.05)
         return name
+
+    def roll_punishment(self) -> tuple[str, list[str]]:
+        name, command_factory = random.choice(self.punishments)
+        return name, command_factory()
+
+    def run_punishment(self, commands: list[str]) -> None:
+        self.wrong_answers += 1
+        for command in commands:
+            self.run(command)
+            time.sleep(0.05)
 
     def run(self, command: str) -> None:
         if self.dry_run:
@@ -868,6 +879,9 @@ class LocalTriviaAgent:
             expected_answer=", ".join(question.answers[:2]),
         )
 
+    def punishment_message(self, punishment_name: str, question: Question, user_answer: str, expected_answer: str) -> str:
+        return f"Punishment rolled: {punishment_name}."
+
 
 class LlmTriviaAgent:
     def __init__(self, client: TextGenerator, category: str) -> None:
@@ -884,7 +898,7 @@ class LlmTriviaAgent:
             self.difficulty += 1
 
         prompt = f"""
-You are running a trivia challenge.
+You are the snarky host of a Minecraft trivia punishment game.
 Create exactly one general trivia question in the requested difficulty.
 
 Difficulty scale:
@@ -900,6 +914,7 @@ Requirements:
 - Avoid repeating these recent questions: {self.history[-12:]}
 - Make the question concise.
 - The answer must be a short factual answer.
+- Keep the question itself clear and answerable; save the attitude for judgement messages.
 - Return only JSON with keys: question, expected_answer, difficulty.
 """
         try:
@@ -920,7 +935,7 @@ Requirements:
 
     def judge_answer(self, question: Question, user_answer: str) -> Judgement:
         prompt = f"""
-You are judging a trivia answer for a Minecraft punishment game.
+You are the snarky host of a Minecraft trivia punishment game.
 
 Question: {question.prompt}
 Expected answer: {question.answers[0]}
@@ -928,9 +943,10 @@ Player answer: {user_answer}
 
 Judge generously for spelling, capitalization, abbreviations, and equivalent wording.
 Do not accept a joke answer, contradiction, or answer that is merely related.
+Write the message in a playful, snarky voice. Keep it short, Minecraft-chat friendly, and not genuinely cruel.
 Return only JSON with keys:
 - correct: boolean
-- message: one short sentence for the player
+- message: one short snarky sentence for the player that clearly says whether they were correct
 - expected_answer: the canonical correct answer
 """
         try:
@@ -941,6 +957,33 @@ Return only JSON with keys:
         message = str(data.get("message", "Correct." if correct else "Wrong.")).strip()
         expected_answer = str(data.get("expected_answer", question.answers[0])).strip()
         return Judgement(correct=correct, message=message, expected_answer=expected_answer)
+
+    def punishment_message(self, punishment_name: str, question: Question, user_answer: str, expected_answer: str) -> str:
+        prompt = f"""
+You are the snarky host of a Minecraft trivia punishment game.
+
+The player got this question wrong:
+Question: {question.prompt}
+Expected answer: {expected_answer}
+Player answer: {user_answer}
+
+The random punishment selected by the game is: {punishment_name}
+
+Write one short Minecraft-chat-friendly punishment announcement.
+Requirements:
+- Be playful and snarky, not genuinely cruel.
+- Mention the punishment by name.
+- Do not include commands or JSON markdown.
+- Return only JSON with key: message
+"""
+        try:
+            data = extract_json_object(self.client.generate(prompt))
+        except ValueError as error:
+            raise RuntimeError(str(error)) from error
+        message = str(data.get("message", "")).strip()
+        if not message:
+            raise RuntimeError(f"LLM produced an incomplete punishment message: {data}")
+        return message
 
     def record_answer(self, correct: bool) -> None:
         if correct:
@@ -1095,7 +1138,19 @@ def main() -> int:
             chaos.announce(judgement.message)
             if not judgement.correct:
                 chaos.announce(f"Expected answer: {judgement.expected_answer}")
-                chaos.punish()
+                punishment_name, punishment_commands = chaos.roll_punishment()
+                try:
+                    punishment_message = agent.punishment_message(
+                        punishment_name,
+                        question,
+                        user_answer,
+                        judgement.expected_answer,
+                    )
+                except RuntimeError as error:
+                    print(f"Could not generate punishment message: {error}", file=sys.stderr)
+                    return 2
+                chaos.announce(punishment_message)
+                chaos.run_punishment(punishment_commands)
             if index < args.questions and args.delay_seconds > 0:
                 chaos.announce(f"Next question in {args.delay_seconds:g} seconds.")
                 time.sleep(args.delay_seconds)

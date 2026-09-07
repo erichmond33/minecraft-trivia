@@ -33,11 +33,23 @@ class TriviaChaosTests(unittest.TestCase):
         commands: list[str] = []
         chaos = MinecraftChaos(send_command=lambda command: commands.append(command) or "", target="@p", dry_run=False)
 
-        punishment_name = chaos.punish()
+        punishment_name = chaos.punish("The AI picked a punishment.")
 
         self.assertTrue(punishment_name)
         self.assertGreaterEqual(len(commands), 2)
-        self.assertTrue(commands[0].startswith("say Wrong answer. Punishment rolled:"))
+        self.assertEqual(commands[0], "say The AI picked a punishment.")
+
+    def test_roll_and_run_punishment_can_use_external_announcement(self) -> None:
+        commands: list[str] = []
+        chaos = MinecraftChaos(send_command=lambda command: commands.append(command) or "", target="@p", dry_run=False)
+
+        name, punishment_commands = chaos.roll_punishment()
+        chaos.announce(f"LLM says {name} is happening.")
+        chaos.run_punishment(punishment_commands)
+
+        self.assertTrue(name)
+        self.assertTrue(commands[0].startswith("say LLM says "))
+        self.assertGreaterEqual(chaos.wrong_answers, 1)
 
     def test_punishment_catalog_has_sixty_options(self) -> None:
         chaos = MinecraftChaos(send_command=lambda command: "", target="@p", dry_run=False)
@@ -60,7 +72,9 @@ class TriviaChaosTests(unittest.TestCase):
                 self.calls += 1
                 if self.calls == 1:
                     return '{"question":"What is 2 + 2?","expected_answer":"4","difficulty":1}'
-                return '{"correct":true,"message":"Correct. Good job.","expected_answer":"4"}'
+                if self.calls == 2:
+                    return '{"correct":true,"message":"Correct. Try not to look so surprised.","expected_answer":"4"}'
+                return '{"message":"Tiny TNT cough, because apparently trivia was too much."}'
 
         agent = LlmTriviaAgent(FakeLlm(), "general trivia")
         question = agent.next_question()
@@ -69,6 +83,9 @@ class TriviaChaosTests(unittest.TestCase):
         self.assertEqual(question.prompt, "What is 2 + 2?")
         self.assertTrue(judgement.correct)
         self.assertEqual(judgement.expected_answer, "4")
+
+        message = agent.punishment_message("Tiny TNT cough", question, "five", "4")
+        self.assertIn("Tiny TNT cough", message)
 
     def test_default_delay_is_three_minutes(self) -> None:
         args = parse_args([])
