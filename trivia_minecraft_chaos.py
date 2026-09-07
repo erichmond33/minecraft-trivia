@@ -560,15 +560,6 @@ class MinecraftChaos:
             time.sleep(0.05)
         return name
 
-    def reward(self) -> None:
-        responses = [
-            "Correct. Good job.",
-            "Correct. You live another question.",
-            "Good job. The mobs are disappointed.",
-            "Correct. Suspiciously competent.",
-        ]
-        self.announce(random.choice(responses))
-
     def run(self, command: str) -> None:
         if self.dry_run:
             print(f"[minecraft] {command}")
@@ -1102,9 +1093,7 @@ def main() -> int:
             agent.record_answer(judgement.correct)
             chaos.announce(f"{chat_message.player} answered: {user_answer}")
             chaos.announce(judgement.message)
-            if judgement.correct:
-                chaos.reward()
-            else:
+            if not judgement.correct:
                 chaos.announce(f"Expected answer: {judgement.expected_answer}")
                 chaos.punish()
             if index < args.questions and args.delay_seconds > 0:
