@@ -1315,9 +1315,9 @@ Difficulty scale:
 10 = ridiculously hard but still objectively answerable.
 
 Requirements:
-- Category preference: X-rated questions - high variety with none sounding like the last. Pair this with questions about Trump and Biden - x-rated. Questions that don't even have a clear answer are fine but use them sparingly.
+- Category preference: As very long and verbose non-sensical questions. These questions should sound like they are being asked by a completely delusional person. Not only should they not really be answerable, but even reading the question should be a difficult task.
 - Current difficulty: {self.difficulty}/10
-- Avoid repeating these recent questions: {self.history[-12:]}
+- Avoid repeating these recent questions: {self.history[-20:]}
 - Make the question concise.
 - The answer must be a short factual answer.
 - Keep the question itself clear and answerable; save the attitude for judgement messages.
@@ -1377,7 +1377,7 @@ The random punishment selected by the game is: {punishment_name}
 
 Write a punishment announcement - the more elborate and smart the better.
 Requirements:
-- Your job is to be as mean and rude and vulgar as possible. These responses should be X-rated.
+- Your job is to get in as many jabs as possible – constantly insult the guesser but all communicate should be nearly incoherant and insane.
 - Do not include commands or JSON markdown.
 - Return only JSON with key: message
 """
