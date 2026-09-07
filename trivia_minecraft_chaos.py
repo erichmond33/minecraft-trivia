@@ -20,7 +20,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from typing import Callable, Protocol
+from typing import Callable, Protocol, Union
 
 
 SERVERDATA_AUTH = 3
@@ -420,6 +420,15 @@ class ChatMessage:
     message: str
 
 
+@dataclasses.dataclass(frozen=True)
+class CommandStep:
+    command: str
+    delay_fraction: float = 0.0
+
+
+CommandPlan = list[Union[str, CommandStep]]
+
+
 class MinecraftChatReader:
     CHAT_PATTERNS = (
         re.compile(r"\]: <([^>]+)> (.*)$"),
@@ -484,14 +493,16 @@ class MinecraftChaos:
         target: str,
         dry_run: bool,
         punishment_mode: str = "brutal",
+        command_pause_seconds: float = 0.05,
     ) -> None:
         self.send_command = send_command
         self.target = target
         self.dry_run = dry_run
         self.punishment_mode = punishment_mode
+        self.command_pause_seconds = command_pause_seconds
         self.wrong_answers = 0
         self.mob_wave_size = 2 * PUNISHMENT_MULTIPLIER
-        self.punishments: list[tuple[str, Callable[[], list[str]]]] = [
+        self.punishments: list[tuple[str, Callable[[], CommandPlan]]] = [
             ("Duplicate nearby hostile mobs", self.duplicate_nearby_hostiles),
             ("Twenty creepers, because subtlety is gone", self.twenty_creepers),
             ("Lightning judgment", self.lightning_ring),
@@ -556,7 +567,7 @@ class MinecraftChaos:
         if punishment_mode == "wacky":
             self.punishments = self.build_wacky_punishments()
 
-    def build_wacky_punishments(self) -> list[tuple[str, Callable[[], list[str]]]]:
+    def build_wacky_punishments(self) -> list[tuple[str, Callable[[], CommandPlan]]]:
         return [
             ("Cobweb escape room with spectators", self.wacky_cobweb_escape_room),
             ("Aquarium of poor decisions", self.wacky_aquarium),
@@ -578,6 +589,11 @@ class MinecraftChaos:
             ("Cactus gallery opening", self.wacky_cactus_gallery),
             ("The pumpkin HR incident", self.wacky_pumpkin_hr),
             ("Tiny apocalypse sampler platter", self.wacky_sampler_platter),
+            ("Shrinking quiz dome", self.wacky_shrinking_quiz_dome),
+            ("Teleport debt collector", self.wacky_teleport_debt_collector),
+            ("Nether customs checkpoint", self.wacky_nether_customs_checkpoint),
+            ("Sky island repossession", self.wacky_sky_island_repossession),
+            ("Raid boss paperwork stack", self.wacky_raid_boss_paperwork_stack),
         ]
 
     def announce(self, text: str) -> None:
@@ -585,25 +601,33 @@ class MinecraftChaos:
             self.run(f"say {line}")
 
     def punish(self, announcement: str | None = None) -> str:
-        self.wrong_answers += 1
         name, command_factory = random.choice(self.punishments)
         commands = command_factory()
         if announcement:
             self.announce(announcement)
-        for command in commands:
-            self.run(command)
-            time.sleep(0.05)
+        self.run_punishment(commands)
         return name
 
-    def roll_punishment(self) -> tuple[str, list[str]]:
+    def roll_punishment(self) -> tuple[str, CommandPlan]:
         name, command_factory = random.choice(self.punishments)
         return name, command_factory()
 
-    def run_punishment(self, commands: list[str]) -> None:
+    def run_punishment(self, commands: CommandPlan, delay_budget_seconds: float = 0.0) -> float:
         self.wrong_answers += 1
-        for command in commands:
+        started_at = time.monotonic()
+        for step in commands:
+            if isinstance(step, CommandStep):
+                target_elapsed = max(0.0, min(step.delay_fraction, 1.0)) * max(0.0, delay_budget_seconds)
+                current_elapsed = time.monotonic() - started_at
+                if target_elapsed > current_elapsed:
+                    time.sleep(target_elapsed - current_elapsed)
+                command = step.command
+            else:
+                command = step
             self.run(command)
-            time.sleep(0.05)
+            if self.command_pause_seconds > 0:
+                time.sleep(self.command_pause_seconds)
+        return time.monotonic() - started_at
 
     def run(self, command: str) -> None:
         if self.dry_run:
@@ -616,6 +640,9 @@ class MinecraftChaos:
 
     def as_target(self, command: str) -> str:
         return f"execute as {self.target} at @s run {command}"
+
+    def stage(self, delay_fraction: float, command: str) -> CommandStep:
+        return CommandStep(command=command, delay_fraction=delay_fraction)
 
     def scaled_count(self, count: int) -> int:
         return count * PUNISHMENT_MULTIPLIER
@@ -879,176 +906,325 @@ class MinecraftChaos:
             f"effect give {self.target} minecraft:hunger 160 4 true",
         ]
 
-    def wacky_cobweb_escape_room(self) -> list[str]:
+    def wacky_cobweb_escape_room(self) -> CommandPlan:
         return [
             self.as_target("tp @s ~ ~1 ~"),
-            self.at_target("fill ~-5 ~-1 ~-5 ~5 ~6 ~5 minecraft:glass replace minecraft:air"),
-            self.at_target("fill ~-4 ~ ~-4 ~4 ~4 ~4 minecraft:cobweb replace minecraft:air"),
+            self.at_target("fill ~-7 ~-1 ~-7 ~7 ~7 ~7 minecraft:tinted_glass replace minecraft:air"),
+            self.at_target("fill ~-6 ~ ~-6 ~6 ~5 ~6 minecraft:cobweb replace minecraft:air"),
             self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
-            f"effect give {self.target} minecraft:mining_fatigue 90 4 true",
-            *self.summon_many("armor_stand", 12, 5, "~", "{CustomName:'\"Disappointed Witness\"',NoGravity:1b}"),
+            f"effect give {self.target} minecraft:mining_fatigue 220 5 true",
+            *self.summon_many("armor_stand", 6, 6, "~", "{CustomName:'\"Disappointed Witness\"',NoGravity:1b}"),
+            self.stage(0.25, self.at_target("fill ~-4 ~ ~-4 ~4 ~4 ~4 minecraft:cobweb replace minecraft:air")),
+            self.stage(0.50, self.at_target("fill ~-2 ~ ~-2 ~2 ~3 ~2 minecraft:powder_snow replace minecraft:air")),
+            self.stage(0.75, self.at_target("summon minecraft:creeper ~ ~ ~ {powered:1b,Fuse:70,CustomName:'\"Escape Room Employee\"'}")),
+            self.stage(0.95, self.at_target("fill ~-7 ~-1 ~-7 ~7 ~7 ~7 minecraft:air replace minecraft:tinted_glass")),
         ]
 
-    def wacky_aquarium(self) -> list[str]:
+    def wacky_aquarium(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-5 ~-1 ~-5 ~5 ~7 ~5 minecraft:glass replace minecraft:air"),
-            self.at_target("fill ~-4 ~ ~-4 ~4 ~6 ~4 minecraft:water replace minecraft:air"),
-            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:water"),
-            f"effect give {self.target} minecraft:water_breathing 45 0 true",
-            *self.summon_many("pufferfish", 18, 4, "~1"),
-            *self.summon_many("guardian", 3, 4, "~1"),
+            self.at_target("fill ~-6 ~-2 ~-6 ~6 ~7 ~6 minecraft:glass replace minecraft:air"),
+            self.at_target("fill ~-5 ~-1 ~-5 ~5 ~6 ~5 minecraft:water replace minecraft:air"),
+            f"effect give {self.target} minecraft:water_breathing 25 0 true",
+            *self.summon_many("pufferfish", 10, 5, "~1"),
+            self.stage(0.22, self.at_target("fill ~-5 ~-1 ~-5 ~5 ~1 ~5 minecraft:bubble_column replace minecraft:water")),
+            self.stage(0.45, self.at_target("fill ~-5 ~-2 ~-5 ~5 ~-2 ~5 minecraft:magma_block")),
+            self.stage(0.65, self.at_target("summon minecraft:elder_guardian ~ ~2 ~")),
+            self.stage(0.82, self.at_target("fill ~-5 ~5 ~-5 ~5 ~6 ~5 minecraft:ice replace minecraft:water")),
+            self.stage(0.96, f"effect clear {self.target} minecraft:water_breathing"),
         ]
 
-    def wacky_goat_court(self) -> list[str]:
+    def wacky_goat_court(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-6 ~-1 ~-6 ~6 ~-1 ~6 minecraft:polished_diorite"),
-            self.at_target("fill ~-6 ~ ~-6 ~6 ~4 ~6 minecraft:iron_bars replace minecraft:air"),
+            self.at_target("fill ~-8 ~-1 ~-8 ~8 ~-1 ~8 minecraft:polished_diorite"),
+            self.at_target("fill ~-8 ~ ~-8 ~8 ~5 ~8 minecraft:iron_bars replace minecraft:air"),
             self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
-            f"effect give {self.target} minecraft:slowness 80 3 true",
-            *self.summon_many("goat", 18, 5),
-            *self.summon_many("villager", 6, 4, "~", "{VillagerData:{profession:\"minecraft:cleric\"}}"),
+            f"effect give {self.target} minecraft:slowness 160 4 true",
+            *self.summon_many("goat", 10, 6),
+            *self.summon_many("villager", 4, 5, "~", "{VillagerData:{profession:\"minecraft:cleric\"}}"),
+            self.stage(0.30, self.at_target("fill ~-5 ~ ~-5 ~5 ~3 ~5 minecraft:cobweb replace minecraft:air")),
+            self.stage(0.55, self.as_target("tp @s ~ ~1 ~")),
+            self.stage(0.56, self.at_target("summon minecraft:ravager ~ ~ ~")),
+            self.stage(0.78, self.at_target("summon minecraft:lightning_bolt ~ ~ ~")),
         ]
 
-    def wacky_anvil_elevator(self) -> list[str]:
+    def wacky_anvil_elevator(self) -> CommandPlan:
         return [
-            self.as_target("tp @s ~ ~35 ~"),
-            f"effect give {self.target} minecraft:slow_falling 3 0 true",
+            self.as_target("tp @s ~ ~55 ~"),
+            f"effect give {self.target} minecraft:slow_falling 5 0 true",
             self.at_target("fill ~-3 ~-2 ~-3 ~3 ~-2 ~3 minecraft:slime_block replace minecraft:air"),
-            *[self.at_target(f"setblock ~{random.randint(-4, 4)} ~16 ~{random.randint(-4, 4)} minecraft:anvil") for _ in range(80)],
+            *[self.at_target(f"setblock ~{random.randint(-5, 5)} ~22 ~{random.randint(-5, 5)} minecraft:anvil") for _ in range(45)],
+            self.stage(0.20, f"effect clear {self.target} minecraft:slow_falling"),
+            self.stage(0.35, self.as_target("tp @s ~ ~18 ~")),
+            self.stage(0.50, self.at_target("fill ~-5 ~20 ~-5 ~5 ~20 ~5 minecraft:pointed_dripstone replace minecraft:air")),
+            self.stage(0.72, self.at_target("summon minecraft:tnt ~ ~8 ~ {Fuse:60}")),
+            self.stage(0.92, f"effect give {self.target} minecraft:slow_falling 8 0 true"),
         ]
 
-    def wacky_boat_dmv(self) -> list[str]:
+    def wacky_boat_dmv(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-7 ~-1 ~-7 ~7 ~-1 ~7 minecraft:blue_ice"),
-            f"effect give {self.target} minecraft:slowness 45 2 true",
-            *self.summon_many("boat", 20, 7),
-            *self.summon_many("zombie", 10, 6, "~", "{IsBaby:1b}"),
+            self.at_target("fill ~-11 ~-1 ~-11 ~11 ~-1 ~11 minecraft:blue_ice"),
+            self.at_target("fill ~-11 ~ ~-11 ~11 ~3 ~11 minecraft:glass_pane replace minecraft:air"),
+            f"effect give {self.target} minecraft:slowness 160 3 true",
+            *self.summon_many("boat", 16, 9),
+            self.stage(0.25, self.at_target("fill ~-10 ~ ~-10 ~10 ~1 ~10 minecraft:water replace minecraft:air")),
+            self.stage(0.42, self.as_target("tp @s ~9 ~ ~-9")),
+            self.stage(0.58, self.as_target("tp @s ~-18 ~ ~18")),
+            self.stage(0.72, self.summon_many("zombie", 6, 4, "~", "{IsBaby:1b}")[0]),
+            self.stage(0.90, self.at_target("summon minecraft:warden ~ ~ ~")),
         ]
 
-    def wacky_minecart_spiral(self) -> list[str]:
+    def wacky_minecart_spiral(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-6 ~-1 ~-6 ~6 ~-1 ~6 minecraft:rail replace minecraft:air"),
-            f"effect give {self.target} minecraft:nausea 45 1 true",
-            *self.summon_many("minecart", 24, 5),
-            *self.summon_many("tnt_minecart", 6, 5),
+            self.at_target("fill ~-9 ~-1 ~-9 ~9 ~-1 ~9 minecraft:powered_rail replace minecraft:air"),
+            f"effect give {self.target} minecraft:nausea 140 1 true",
+            *self.summon_many("minecart", 14, 8),
+            self.stage(0.18, self.at_target("fill ~-7 ~ ~-7 ~7 ~2 ~7 minecraft:cobweb replace minecraft:air")),
+            self.stage(0.38, self.as_target("tp @s ~ ~2 ~")),
+            self.stage(0.55, self.at_target("summon minecraft:tnt_minecart ~ ~ ~")),
+            self.stage(0.74, self.at_target("summon minecraft:tnt_minecart ~2 ~ ~2")),
+            self.stage(0.91, self.at_target("summon minecraft:creeper ~ ~ ~ {powered:1b,Fuse:50}")),
         ]
 
-    def wacky_creeper_confessional(self) -> list[str]:
+    def wacky_creeper_confessional(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-3 ~-1 ~-3 ~3 ~4 ~3 minecraft:glass replace minecraft:air"),
+            self.at_target("fill ~-5 ~-1 ~-5 ~5 ~5 ~5 minecraft:glass replace minecraft:air"),
             self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
-            f"effect give {self.target} minecraft:weakness 60 4 true",
-            *self.summon_many("creeper", 8, 2, "~", "{powered:1b,Fuse:80}"),
+            f"effect give {self.target} minecraft:weakness 180 4 true",
+            *self.summon_many("creeper", 4, 3, "~", "{powered:1b,Fuse:100}"),
+            self.stage(0.20, self.at_target("fill ~-4 ~ ~-4 ~4 ~3 ~4 minecraft:cobweb replace minecraft:air")),
+            self.stage(0.40, self.at_target("summon minecraft:creeper ~4 ~ ~ {powered:1b,Fuse:70}")),
+            self.stage(0.60, self.at_target("summon minecraft:creeper ~-4 ~ ~ {powered:1b,Fuse:50}")),
+            self.stage(0.80, self.at_target("summon minecraft:creeper ~ ~ ~4 {powered:1b,Fuse:35}")),
+            self.stage(0.96, self.at_target("summon minecraft:tnt ~ ~2 ~ {Fuse:20}")),
         ]
 
-    def wacky_powder_snow_smoothie(self) -> list[str]:
+    def wacky_powder_snow_smoothie(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-6 ~-2 ~-6 ~6 ~5 ~6 minecraft:powder_snow replace minecraft:air"),
+            self.at_target("fill ~-7 ~-2 ~-7 ~7 ~6 ~7 minecraft:powder_snow replace minecraft:air"),
             self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
-            f"effect give {self.target} minecraft:slowness 100 4 true",
-            f"effect give {self.target} minecraft:blindness 35 0 true",
-            *self.summon_many("stray", 10, 6),
+            f"effect give {self.target} minecraft:slowness 180 5 true",
+            f"effect give {self.target} minecraft:darkness 90 0 true",
+            *self.summon_many("stray", 7, 6),
+            self.stage(0.24, self.at_target("fill ~-3 ~ ~-3 ~3 ~4 ~3 minecraft:cobweb replace minecraft:air")),
+            self.stage(0.48, self.at_target("fill ~-6 ~-2 ~-6 ~6 ~-2 ~6 minecraft:blue_ice")),
+            self.stage(0.70, self.summon_many("skeleton", 4, 4)[0]),
+            self.stage(0.90, self.at_target("setblock ~ ~4 ~ minecraft:powder_snow")),
         ]
 
-    def wacky_enderman_staring_contest(self) -> list[str]:
+    def wacky_enderman_staring_contest(self) -> CommandPlan:
         return [
             "time set midnight",
-            f"effect give {self.target} minecraft:glowing 120 0 true",
-            f"effect give {self.target} minecraft:blindness 12 0 true",
-            *self.summon_many("enderman", 16, 6),
-            *self.summon_many("endermite", 24, 4),
+            f"effect give {self.target} minecraft:glowing 220 0 true",
+            f"effect give {self.target} minecraft:darkness 90 0 true",
+            *self.summon_many("enderman", 8, 6),
+            self.stage(0.20, self.at_target("fill ~-6 ~-1 ~-6 ~6 ~-1 ~6 minecraft:soul_sand")),
+            self.stage(0.35, self.as_target("tp @s ~8 ~ ~8")),
+            self.stage(0.55, self.as_target("tp @s ~-16 ~ ~-16")),
+            self.stage(0.75, self.summon_many("endermite", 8, 4)[0]),
+            self.stage(0.93, self.at_target("summon minecraft:enderman ~ ~ ~ {CustomName:'\"Final Examiner\"'}")),
         ]
 
-    def wacky_witch_soup_kitchen(self) -> list[str]:
+    def wacky_witch_soup_kitchen(self) -> CommandPlan:
         return [
             f"give {self.target} minecraft:suspicious_stew 32",
-            f"effect give {self.target} minecraft:nausea 90 1 true",
+            f"effect give {self.target} minecraft:nausea 160 1 true",
             f"effect give {self.target} minecraft:hunger 160 5 true",
-            *self.summon_many("witch", 12, 8),
-            *self.summon_many("cat", 20, 8),
+            *self.summon_many("witch", 7, 8),
+            self.stage(0.25, f"effect give {self.target} minecraft:poison 18 1 true"),
+            self.stage(0.45, f"effect give {self.target} minecraft:blindness 20 0 true"),
+            self.stage(0.63, self.at_target("fill ~-5 ~ ~-5 ~5 ~2 ~5 minecraft:sweet_berry_bush replace minecraft:air")),
+            self.stage(0.84, self.summon_many("cat", 8, 8)[0]),
         ]
 
-    def wacky_pufferfish_meeting(self) -> list[str]:
+    def wacky_pufferfish_meeting(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-5 ~-1 ~-5 ~5 ~4 ~5 minecraft:water replace minecraft:air"),
-            self.at_target("fill ~-5 ~5 ~-5 ~5 ~5 ~5 minecraft:glass replace minecraft:air"),
-            f"effect give {self.target} minecraft:water_breathing 60 0 true",
-            *self.summon_many("pufferfish", 40, 5, "~1"),
+            self.at_target("fill ~-7 ~-1 ~-7 ~7 ~5 ~7 minecraft:water replace minecraft:air"),
+            self.at_target("fill ~-7 ~6 ~-7 ~7 ~6 ~7 minecraft:glass replace minecraft:air"),
+            f"effect give {self.target} minecraft:water_breathing 40 0 true",
+            *self.summon_many("pufferfish", 22, 6, "~1"),
+            self.stage(0.25, self.at_target("fill ~-6 ~-1 ~-6 ~6 ~-1 ~6 minecraft:magma_block")),
+            self.stage(0.50, self.at_target("summon minecraft:guardian ~ ~2 ~")),
+            self.stage(0.75, f"effect give {self.target} minecraft:poison 12 1 true"),
+            self.stage(0.92, f"effect clear {self.target} minecraft:water_breathing"),
         ]
 
-    def wacky_chicken_ceiling(self) -> list[str]:
+    def wacky_chicken_ceiling(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-5 ~7 ~-5 ~5 ~7 ~5 minecraft:glass replace minecraft:air"),
-            *self.summon_many("chicken", 80, 5, "~8"),
-            *self.summon_many("egg", 80, 5, "~12", "{Motion:[0.0,-1.5,0.0]}"),
+            self.at_target("fill ~-7 ~8 ~-7 ~7 ~8 ~7 minecraft:glass replace minecraft:air"),
+            *self.summon_many("chicken", 25, 6, "~9"),
+            self.stage(0.20, self.summon_many("egg", 20, 5, "~14", "{Motion:[0.0,-1.8,0.0]}")[0]),
+            self.stage(0.40, self.at_target("fill ~-6 ~ ~-6 ~6 ~2 ~6 minecraft:cobweb replace minecraft:air")),
+            self.stage(0.60, self.summon_many("egg", 20, 5, "~14", "{Motion:[0.0,-2.0,0.0]}")[0]),
+            self.stage(0.80, self.at_target("summon minecraft:creeper ~ ~ ~ {Fuse:60,CustomName:'\"Egg Inspector\"'}")),
         ]
 
-    def wacky_lava_moat(self) -> list[str]:
+    def wacky_lava_moat(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-10 ~-1 ~-10 ~10 ~1 ~10 minecraft:lava replace minecraft:air"),
-            self.at_target("fill ~-4 ~-1 ~-4 ~4 ~1 ~4 minecraft:air replace minecraft:lava"),
+            self.at_target("fill ~-12 ~-1 ~-12 ~12 ~1 ~12 minecraft:lava replace minecraft:air"),
+            self.at_target("fill ~-5 ~-1 ~-5 ~5 ~1 ~5 minecraft:air replace minecraft:lava"),
             self.at_target("fill ~-3 ~-1 ~-3 ~3 ~-1 ~3 minecraft:soul_sand"),
-            f"effect give {self.target} minecraft:jump_boost 45 128 true",
-            *self.summon_many("strider", 12, 8),
+            f"effect give {self.target} minecraft:jump_boost 120 128 true",
+            *self.summon_many("strider", 6, 8),
+            self.stage(0.25, self.at_target("fill ~-7 ~-1 ~-7 ~7 ~1 ~7 minecraft:lava replace minecraft:air")),
+            self.stage(0.50, self.at_target("fill ~-4 ~ ~-4 ~4 ~3 ~4 minecraft:cobweb replace minecraft:air")),
+            self.stage(0.70, self.as_target("tp @s ~ ~1 ~")),
+            self.stage(0.88, self.at_target("summon minecraft:blaze ~ ~2 ~")),
         ]
 
-    def wacky_phantom_airport(self) -> list[str]:
+    def wacky_phantom_airport(self) -> CommandPlan:
         return [
-            self.as_target("tp @s ~ ~60 ~"),
-            f"effect give {self.target} minecraft:slow_falling 25 0 true",
-            f"effect give {self.target} minecraft:glowing 80 0 true",
-            *self.summon_many("phantom", 18, 12, "~8"),
+            self.as_target("tp @s ~ ~75 ~"),
+            f"effect give {self.target} minecraft:slow_falling 18 0 true",
+            f"effect give {self.target} minecraft:glowing 180 0 true",
+            *self.summon_many("phantom", 9, 12, "~8"),
+            self.stage(0.28, f"effect clear {self.target} minecraft:slow_falling"),
+            self.stage(0.44, self.at_target("summon minecraft:phantom ~ ~10 ~ {Size:4}")),
+            self.stage(0.58, self.as_target("tp @s ~18 ~ ~-18")),
+            self.stage(0.74, self.at_target("fill ~-4 ~-3 ~-4 ~4 ~-3 ~4 minecraft:slime_block replace minecraft:air")),
+            self.stage(0.90, self.at_target("summon minecraft:tnt ~ ~10 ~ {Fuse:40}")),
         ]
 
-    def wacky_bee_lawsuit(self) -> list[str]:
+    def wacky_bee_lawsuit(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-6 ~-1 ~-6 ~6 ~4 ~6 minecraft:honey_block replace minecraft:air"),
+            self.at_target("fill ~-8 ~-1 ~-8 ~8 ~4 ~8 minecraft:honey_block replace minecraft:air"),
             self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
-            f"effect give {self.target} minecraft:slowness 80 5 true",
-            *self.summon_many("bee", 36, 6, "~", "{AngerTime:6000}"),
+            f"effect give {self.target} minecraft:slowness 180 5 true",
+            *self.summon_many("bee", 18, 7, "~", "{AngerTime:6000}"),
+            self.stage(0.25, self.at_target("fill ~-6 ~ ~-6 ~6 ~3 ~6 minecraft:cobweb replace minecraft:air")),
+            self.stage(0.50, self.at_target("summon minecraft:bee ~ ~ ~ {AngerTime:6000,CustomName:'\"Lead Counsel\"'}")),
+            self.stage(0.72, f"effect give {self.target} minecraft:poison 12 0 true"),
+            self.stage(0.92, self.at_target("fill ~-8 ~-1 ~-8 ~8 ~4 ~8 minecraft:air replace minecraft:honey_block")),
         ]
 
-    def wacky_slime_trampoline(self) -> list[str]:
+    def wacky_slime_trampoline(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-8 ~-1 ~-8 ~8 ~-1 ~8 minecraft:slime_block"),
-            f"effect give {self.target} minecraft:levitation 8 8 true",
-            f"effect give {self.target} minecraft:slow_falling 20 0 true",
-            *self.summon_many("slime", 18, 8, "~", "{Size:8}"),
+            self.at_target("fill ~-10 ~-1 ~-10 ~10 ~-1 ~10 minecraft:slime_block"),
+            f"effect give {self.target} minecraft:levitation 10 12 true",
+            f"effect give {self.target} minecraft:slow_falling 25 0 true",
+            *self.summon_many("slime", 10, 8, "~", "{Size:8}"),
+            self.stage(0.25, self.as_target("tp @s ~ ~25 ~")),
+            self.stage(0.42, self.at_target("fill ~-4 ~15 ~-4 ~4 ~15 ~4 minecraft:anvil replace minecraft:air")),
+            self.stage(0.62, f"effect clear {self.target} minecraft:slow_falling"),
+            self.stage(0.82, self.at_target("summon minecraft:magma_cube ~ ~ ~ {Size:8}")),
         ]
 
-    def wacky_magma_pit(self) -> list[str]:
+    def wacky_magma_pit(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-7 ~-3 ~-7 ~7 ~-1 ~7 minecraft:magma_block"),
-            self.at_target("fill ~-3 ~ ~-3 ~3 ~4 ~3 minecraft:cobweb replace minecraft:air"),
-            f"effect give {self.target} minecraft:fire_resistance 8 0 true",
-            *self.summon_many("magma_cube", 14, 7, "~", "{Size:7}"),
+            self.at_target("fill ~-9 ~-3 ~-9 ~9 ~-1 ~9 minecraft:magma_block"),
+            self.at_target("fill ~-5 ~ ~-5 ~5 ~4 ~5 minecraft:cobweb replace minecraft:air"),
+            f"effect give {self.target} minecraft:fire_resistance 12 0 true",
+            *self.summon_many("magma_cube", 7, 7, "~", "{Size:7}"),
+            self.stage(0.25, self.at_target("fill ~-6 ~ ~-6 ~6 ~1 ~6 minecraft:lava replace minecraft:air")),
+            self.stage(0.45, f"effect clear {self.target} minecraft:fire_resistance"),
+            self.stage(0.66, self.as_target("tp @s ~ ~2 ~")),
+            self.stage(0.88, self.at_target("summon minecraft:blaze ~ ~2 ~")),
         ]
 
-    def wacky_cactus_gallery(self) -> list[str]:
+    def wacky_cactus_gallery(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-9 ~-1 ~-9 ~9 ~-1 ~9 minecraft:sand"),
-            *[self.at_target(f"setblock ~{random.randint(-9, 9)} ~ ~{random.randint(-9, 9)} minecraft:cactus") for _ in range(90)],
-            f"effect give {self.target} minecraft:speed 25 4 true",
+            self.at_target("fill ~-12 ~-1 ~-12 ~12 ~-1 ~12 minecraft:sand"),
+            *[self.at_target(f"setblock ~{random.randint(-12, 12)} ~ ~{random.randint(-12, 12)} minecraft:cactus") for _ in range(55)],
+            f"effect give {self.target} minecraft:speed 80 5 true",
+            self.stage(0.24, self.at_target("fill ~-8 ~ ~-8 ~8 ~2 ~8 minecraft:sweet_berry_bush replace minecraft:air")),
+            self.stage(0.48, self.as_target("tp @s ~10 ~ ~10")),
+            self.stage(0.68, self.as_target("tp @s ~-20 ~ ~-20")),
+            self.stage(0.90, self.at_target("summon minecraft:ravager ~ ~ ~")),
         ]
 
-    def wacky_pumpkin_hr(self) -> list[str]:
+    def wacky_pumpkin_hr(self) -> CommandPlan:
         return [
             f"item replace entity {self.target} armor.head with minecraft:carved_pumpkin",
-            f"effect give {self.target} minecraft:darkness 80 0 true",
-            f"effect give {self.target} minecraft:nausea 60 1 true",
-            *self.summon_many("armor_stand", 24, 6, "~", "{CustomName:'\"HR Representative\"',NoGravity:1b}"),
+            f"effect give {self.target} minecraft:darkness 160 0 true",
+            f"effect give {self.target} minecraft:nausea 120 1 true",
+            *self.summon_many("armor_stand", 10, 6, "~", "{CustomName:'\"HR Representative\"',NoGravity:1b}"),
+            self.stage(0.25, self.at_target("fill ~-5 ~ ~-5 ~5 ~3 ~5 minecraft:glass_pane replace minecraft:air")),
+            self.stage(0.50, self.as_target("tp @s ~ ~1 ~")),
+            self.stage(0.52, self.at_target("summon minecraft:vex ~ ~2 ~")),
+            self.stage(0.75, self.at_target("summon minecraft:vex ~ ~2 ~")),
+            self.stage(0.94, f"item replace entity {self.target} armor.head with minecraft:air"),
         ]
 
-    def wacky_sampler_platter(self) -> list[str]:
+    def wacky_sampler_platter(self) -> CommandPlan:
         return [
-            self.at_target("fill ~-4 ~-1 ~-4 ~4 ~3 ~4 minecraft:cobweb replace minecraft:air"),
-            self.as_target("tp @s ~ ~8 ~"),
-            f"effect give {self.target} minecraft:blindness 25 0 true",
-            f"effect give {self.target} minecraft:hunger 120 4 true",
-            *self.summon_many("creeper", 4, 5, "~", "{powered:1b,Fuse:60}"),
-            *self.summon_many("witch", 4, 5),
-            *self.summon_many("phantom", 5, 8, "~8"),
-            *self.summon_many("tnt", 4, 4, "~2", "{Fuse:50}"),
+            self.at_target("fill ~-6 ~-1 ~-6 ~6 ~4 ~6 minecraft:cobweb replace minecraft:air"),
+            self.as_target("tp @s ~ ~12 ~"),
+            f"effect give {self.target} minecraft:blindness 45 0 true",
+            f"effect give {self.target} minecraft:hunger 180 4 true",
+            *self.summon_many("creeper", 3, 5, "~", "{powered:1b,Fuse:80}"),
+            self.stage(0.20, self.summon_many("witch", 3, 5)[0]),
+            self.stage(0.38, self.summon_many("phantom", 3, 8, "~8")[0]),
+            self.stage(0.56, self.summon_many("tnt", 3, 4, "~2", "{Fuse:50}")[0]),
+            self.stage(0.74, self.at_target("fill ~-8 ~-1 ~-8 ~8 ~-1 ~8 minecraft:lava replace minecraft:air")),
+            self.stage(0.90, self.at_target("summon minecraft:warden ~ ~ ~")),
+        ]
+
+    def wacky_shrinking_quiz_dome(self) -> CommandPlan:
+        return [
+            self.at_target("fill ~-12 ~-1 ~-12 ~12 ~8 ~12 minecraft:tinted_glass replace minecraft:air"),
+            self.at_target("fill ~-10 ~ ~-10 ~10 ~6 ~10 minecraft:air"),
+            f"effect give {self.target} minecraft:glowing 220 0 true",
+            *self.summon_many("skeleton", 5, 10),
+            self.stage(0.20, self.at_target("fill ~-10 ~ ~-10 ~10 ~5 ~10 minecraft:cobweb replace minecraft:air")),
+            self.stage(0.36, self.at_target("fill ~-8 ~-1 ~-8 ~8 ~7 ~8 minecraft:obsidian replace minecraft:tinted_glass")),
+            self.stage(0.52, self.at_target("fill ~-6 ~-1 ~-6 ~6 ~7 ~6 minecraft:tinted_glass replace minecraft:air")),
+            self.stage(0.68, self.at_target("fill ~-4 ~-1 ~-4 ~4 ~7 ~4 minecraft:lava replace minecraft:air")),
+            self.stage(0.84, self.at_target("summon minecraft:warden ~ ~ ~")),
+            self.stage(0.97, self.at_target("fill ~-2 ~ ~-2 ~2 ~3 ~2 minecraft:powder_snow replace minecraft:air")),
+        ]
+
+    def wacky_teleport_debt_collector(self) -> CommandPlan:
+        return [
+            self.at_target("fill ~-9 ~-1 ~-9 ~9 ~-1 ~9 minecraft:amethyst_block"),
+            f"effect give {self.target} minecraft:darkness 140 0 true",
+            self.stage(0.12, self.as_target("tp @s ~18 ~3 ~18")),
+            self.stage(0.18, self.at_target("summon minecraft:creeper ~ ~ ~ {powered:1b,Fuse:80}")),
+            self.stage(0.32, self.as_target("tp @s ~-36 ~3 ~")),
+            self.stage(0.38, self.at_target("summon minecraft:vex ~ ~2 ~")),
+            self.stage(0.52, self.as_target("tp @s ~18 ~3 ~-18")),
+            self.stage(0.58, self.at_target("summon minecraft:tnt ~ ~2 ~ {Fuse:45}")),
+            self.stage(0.74, self.as_target("tp @s ~ ~6 ~")),
+            self.stage(0.88, self.at_target("summon minecraft:warden ~ ~ ~")),
+        ]
+
+    def wacky_nether_customs_checkpoint(self) -> CommandPlan:
+        return [
+            self.at_target("fill ~-10 ~-1 ~-10 ~10 ~-1 ~10 minecraft:netherrack"),
+            self.at_target("fill ~-10 ~ ~-10 ~10 ~4 ~10 minecraft:nether_brick_fence replace minecraft:air"),
+            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
+            f"effect give {self.target} minecraft:fire_resistance 20 0 true",
+            *self.summon_many("hoglin", 4, 7),
+            self.stage(0.22, self.at_target("fill ~-8 ~ ~-8 ~8 ~1 ~8 minecraft:lava replace minecraft:air")),
+            self.stage(0.40, self.summon_many("blaze", 4, 8, "~3")[0]),
+            self.stage(0.58, f"effect clear {self.target} minecraft:fire_resistance"),
+            self.stage(0.70, self.as_target("tp @s ~ ~2 ~")),
+            self.stage(0.86, self.at_target("summon minecraft:zoglin ~ ~ ~")),
+        ]
+
+    def wacky_sky_island_repossession(self) -> CommandPlan:
+        return [
+            self.as_target("tp @s ~ ~90 ~"),
+            self.at_target("fill ~-5 ~-1 ~-5 ~5 ~-1 ~5 minecraft:slime_block replace minecraft:air"),
+            f"effect give {self.target} minecraft:slow_falling 18 0 true",
+            *self.summon_many("phantom", 5, 10, "~6"),
+            self.stage(0.24, self.at_target("fill ~1 ~-1 ~-5 ~5 ~-1 ~5 minecraft:air")),
+            self.stage(0.42, self.at_target("fill ~-5 ~-1 ~1 ~0 ~-1 ~5 minecraft:air")),
+            self.stage(0.58, f"effect clear {self.target} minecraft:slow_falling"),
+            self.stage(0.70, self.at_target("fill ~-2 ~20 ~-2 ~2 ~20 ~2 minecraft:anvil replace minecraft:air")),
+            self.stage(0.86, self.at_target("summon minecraft:tnt ~ ~8 ~ {Fuse:60}")),
+            self.stage(0.96, f"effect give {self.target} minecraft:slow_falling 8 0 true"),
+        ]
+
+    def wacky_raid_boss_paperwork_stack(self) -> CommandPlan:
+        return [
+            self.at_target("fill ~-10 ~-1 ~-10 ~10 ~-1 ~10 minecraft:dark_oak_planks"),
+            self.at_target("fill ~-10 ~ ~-10 ~10 ~5 ~10 minecraft:dark_oak_fence replace minecraft:air"),
+            f"effect give {self.target} minecraft:weakness 180 3 true",
+            *self.summon_many("pillager", 5, 8),
+            self.stage(0.20, self.at_target("summon minecraft:ravager ~ ~ ~")),
+            self.stage(0.38, self.summon_many("vex", 4, 5, "~2")[0]),
+            self.stage(0.56, self.at_target("summon minecraft:evoker ~ ~ ~")),
+            self.stage(0.72, self.at_target("fill ~-7 ~ ~-7 ~7 ~2 ~7 minecraft:cobweb replace minecraft:air")),
+            self.stage(0.90, self.at_target("summon minecraft:ravager ~ ~ ~ {CustomName:'\"Department Head\"'}")),
         ]
 
 
@@ -1352,6 +1528,7 @@ def main() -> int:
         else:
             chaos.announce("The next player chat message after each question counts as the answer.")
         for index in range(1, args.questions + 1):
+            delay_consumed = 0.0
             try:
                 question = agent.next_question()
             except RuntimeError as error:
@@ -1391,10 +1568,15 @@ def main() -> int:
                     print(f"Could not generate punishment message: {error}", file=sys.stderr)
                     return 2
                 chaos.announce(punishment_message)
-                chaos.run_punishment(punishment_commands)
+                delay_consumed = chaos.run_punishment(
+                    punishment_commands,
+                    delay_budget_seconds=args.delay_seconds,
+                )
             if index < args.questions and args.delay_seconds > 0:
-                chaos.announce(f"Next question in {args.delay_seconds:g} seconds.")
-                time.sleep(args.delay_seconds)
+                remaining_delay = max(0.0, args.delay_seconds - delay_consumed)
+                if remaining_delay > 0:
+                    chaos.announce(f"Next question in {remaining_delay:g} seconds.")
+                    time.sleep(remaining_delay)
         chaos.announce("Trivia chaos complete.")
     finally:
         if client is not None:

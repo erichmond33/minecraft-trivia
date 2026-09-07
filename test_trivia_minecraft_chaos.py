@@ -1,7 +1,9 @@
 import unittest
+from typing import Union
 
 from trivia_minecraft_chaos import (
     ChatMessage,
+    CommandStep,
     GeminiClient,
     LlmTriviaAgent,
     LocalTriviaAgent,
@@ -32,7 +34,12 @@ class TriviaChaosTests(unittest.TestCase):
 
     def test_wrong_answer_rolls_one_punishment(self) -> None:
         commands: list[str] = []
-        chaos = MinecraftChaos(send_command=lambda command: commands.append(command) or "", target="@p", dry_run=False)
+        chaos = MinecraftChaos(
+            send_command=lambda command: commands.append(command) or "",
+            target="@p",
+            dry_run=False,
+            command_pause_seconds=0,
+        )
 
         punishment_name = chaos.punish("The AI picked a punishment.")
 
@@ -42,7 +49,12 @@ class TriviaChaosTests(unittest.TestCase):
 
     def test_roll_and_run_punishment_can_use_external_announcement(self) -> None:
         commands: list[str] = []
-        chaos = MinecraftChaos(send_command=lambda command: commands.append(command) or "", target="@p", dry_run=False)
+        chaos = MinecraftChaos(
+            send_command=lambda command: commands.append(command) or "",
+            target="@p",
+            dry_run=False,
+            command_pause_seconds=0,
+        )
 
         name, punishment_commands = chaos.roll_punishment()
         chaos.announce(f"LLM says {name} is happening.")
@@ -56,14 +68,14 @@ class TriviaChaosTests(unittest.TestCase):
         chaos = MinecraftChaos(send_command=lambda command: "", target="@p", dry_run=False)
         self.assertEqual(len(chaos.punishments), 60)
 
-    def test_wacky_punishment_catalog_has_twenty_options(self) -> None:
+    def test_wacky_punishment_catalog_has_twenty_five_options(self) -> None:
         chaos = MinecraftChaos(
             send_command=lambda command: "",
             target="@p",
             dry_run=False,
             punishment_mode="wacky",
         )
-        self.assertEqual(len(chaos.punishments), 20)
+        self.assertEqual(len(chaos.punishments), 25)
         self.assertEqual(chaos.punishment_mode, "wacky")
 
     def test_punishment_multiplier_is_ten(self) -> None:
@@ -90,7 +102,34 @@ class TriviaChaosTests(unittest.TestCase):
             with self.subTest(name=name):
                 commands = factory()
                 self.assertTrue(commands)
-                self.assertTrue(all(isinstance(command, str) and command for command in commands))
+                self.assertTrue(all(self._valid_command_step(command) for command in commands))
+                self.assertTrue(any(isinstance(command, CommandStep) for command in commands))
+
+    def test_staged_punishment_uses_delay_budget(self) -> None:
+        commands: list[str] = []
+        chaos = MinecraftChaos(
+            send_command=lambda command: commands.append(command) or "",
+            target="@p",
+            dry_run=False,
+            command_pause_seconds=0,
+        )
+
+        elapsed = chaos.run_punishment(
+            [
+                "say now",
+                CommandStep("say halfway", 0.01),
+                CommandStep("say later", 0.02),
+            ],
+            delay_budget_seconds=0.01,
+        )
+
+        self.assertEqual(commands, ["say now", "say halfway", "say later"])
+        self.assertGreaterEqual(elapsed, 0)
+
+    def _valid_command_step(self, command: Union[str, CommandStep]) -> bool:
+        if isinstance(command, str):
+            return bool(command)
+        return bool(command.command) and 0 <= command.delay_fraction <= 1
 
     def test_llm_agent_generates_and_judges_question_from_json(self) -> None:
         class FakeLlm:

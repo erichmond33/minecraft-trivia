@@ -1,6 +1,6 @@
 # Minecraft Trivia Chaos
 
-`trivia_minecraft_chaos.py` runs a Minecraft chat trivia game through RCON and the server log. An LLM creates each question in real time, judges whether the answer is correct, and writes the snarky chat response. Wrong answers roll one of 60 brutal punishments by default, or a separate pool of wacky multi-step punishments when enabled. The LLM writes the punishment announcement too.
+`trivia_minecraft_chaos.py` runs a Minecraft chat trivia game through RCON and the server log. An LLM creates each question in real time, judges whether the answer is correct, and writes the snarky chat response. Wrong answers roll one of 60 brutal punishments by default, or a separate pool of wacky staged punishments when enabled. The LLM writes the punishment announcement too.
 
 ## Gemini Setup
 
@@ -92,7 +92,7 @@ Useful options:
 - `--answer-player PlayerName` only accepts answers from one Minecraft username.
 - `--chat-log logs/latest.log` chooses the server log to read chat answers from.
 - `--questions 50` changes the session length. The default is `100`.
-- `--delay-seconds 30` waits 30 seconds between questions. The default is `180`, or 3 minutes.
+- `--delay-seconds 30` waits 30 seconds between questions. The default is `180`, or 3 minutes. In wacky mode, staged punishment events can use this whole window.
 - `--punishment-mode wacky` uses complex wacky punishments instead of the brutal spawn/effect pool.
 - `--wacky-punishments` is a shortcut for `--punishment-mode wacky`.
 - `--category "Minecraft and science"` nudges the LLM toward a category.
@@ -179,7 +179,7 @@ I intentionally made the chunk punishment limited. Deleting an actual chunk is b
 
 ## Wacky Punishments
 
-Use `--wacky-punishments` to swap the normal pool for 20 more elaborate punishments. These are built to be harder to ignore than raw mob spam: glass rooms, cobweb mazes, water tanks, moving-vehicle clutter, lava moats, status-effect combos, spectator mobs, and mixed staged disasters.
+Use `--wacky-punishments` to swap the normal pool for 25 more elaborate punishments. These are built to be harder to ignore than raw mob spam: shrinking traps, delayed teleports, evolving rooms, water tanks that get worse over time, staged follow-up spawns, terrain changes, status-effect combos, and mixed disasters that can unfold across the full delay before the next question.
 
 ## Other Ideas That Would Fit Well
 
