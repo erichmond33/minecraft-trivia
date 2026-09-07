@@ -1,6 +1,6 @@
 # Minecraft Trivia Chaos
 
-`trivia_minecraft_chaos.py` runs a terminal trivia game and talks to a local Minecraft Java server through RCON. Gemini creates each question in real time and judges whether the answer is correct. Correct answers get a short in-game message. Wrong answers roll one of 60 random punishments.
+`trivia_minecraft_chaos.py` runs a Minecraft chat trivia game through RCON and the server log. An LLM creates each question in real time and judges whether the answer is correct. Correct answers get a short in-game message. Wrong answers roll one of 60 random punishments.
 
 ## Gemini Setup
 
@@ -11,6 +11,16 @@ GEMINI_KEY=your-api-key
 ```
 
 The script also accepts `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
+
+## Ollama Setup
+
+For Ollama Cloud, put your API key in `.env`:
+
+```properties
+OLLAMA_API_KEY=your-api-key
+```
+
+Ollama Cloud uses `https://ollama.com/api/chat`. Local Ollama can also be used with `--ollama-host http://localhost:11434`.
 
 ## Minecraft Setup
 
@@ -24,34 +34,66 @@ rcon.password=change-this-password
 
 Restart the server after editing that file.
 
-## Run It
-
-Test without connecting to Minecraft:
+The script reads player answers from the Minecraft server log. Run it from the server directory, or pass the log path explicitly:
 
 ```bash
-python3 trivia_minecraft_chaos.py --dry-run --questions 5
+--chat-log /path/to/server/logs/latest.log
+```
+
+## Run It
+
+Test without connecting to Minecraft commands while still reading answers from a log file:
+
+```bash
+python3 trivia_minecraft_chaos.py --dry-run --questions 5 --chat-log logs/latest.log
 ```
 
 That still uses Gemini. To test completely offline with the old built-in question bank:
 
 ```bash
-python3 trivia_minecraft_chaos.py --dry-run --offline-questions --questions 5
+python3 trivia_minecraft_chaos.py --dry-run --offline-questions --questions 5 --delay-seconds 0 --chat-log logs/latest.log
 ```
 
-Run against a local server:
+Run against a local server with Gemini:
 
 ```bash
 python3 trivia_minecraft_chaos.py --password change-this-password --target @a
+```
+
+Run against a local server with Ollama Cloud:
+
+```bash
+python3 trivia_minecraft_chaos.py --llm-provider ollama --ollama-model gpt-oss:120b --password change-this-password --target @a
+```
+
+Run with local Ollama:
+
+```bash
+python3 trivia_minecraft_chaos.py --llm-provider ollama --ollama-host http://localhost:11434 --ollama-model llama3.1 --password change-this-password --target @a
 ```
 
 Useful options:
 
 - `--target @p` punishes only the nearest player.
 - `--target PlayerName` punishes one player by name.
-- `--questions 50` changes the session length.
-- `--category "Minecraft and science"` nudges Gemini toward a category.
+- `--answer-player PlayerName` only accepts answers from one Minecraft username.
+- `--chat-log logs/latest.log` chooses the server log to read chat answers from.
+- `--questions 50` changes the session length. The default is `100`.
+- `--delay-seconds 30` waits 30 seconds between questions. The default is `180`, or 3 minutes.
+- `--category "Minecraft and science"` nudges the LLM toward a category.
+- `--llm-provider ollama` uses Ollama instead of Gemini.
 - `--gemini-model gemini-3.7-flash` changes the model.
+- `--ollama-model gpt-oss:120b` changes the Ollama model.
+- `--ollama-host https://ollama.com` changes the Ollama API host.
+- `--llm-ca-file /path/to/cacert.pem` points Python at a CA bundle if HTTPS certificate verification fails.
+- `--llm-insecure-skip-verify` disables LLM HTTPS certificate verification for local testing.
 - `--host` and `--port` point at a non-default RCON server.
+
+If you see `CERTIFICATE_VERIFY_FAILED` on macOS, your Python install probably does not have its certificate store set up. The best fix is to run Python's `Install Certificates.command` for your Python install. For a quick local test, run:
+
+```bash
+python3 trivia_minecraft_chaos.py --dry-run --questions 5 --delay-seconds 0 --llm-insecure-skip-verify --chat-log logs/latest.log
+```
 
 ## Punishments Included
 

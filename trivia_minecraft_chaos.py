@@ -21,7 +21,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from typing import Callable
+from typing import Callable, Protocol
 
 
 SERVERDATA_AUTH = 3
@@ -123,6 +123,11 @@ class Judgement:
     expected_answer: str
 
 
+class TextGenerator(Protocol):
+    def generate(self, prompt: str) -> str:
+        ...
+
+
 def load_dotenv(path: str = ".env") -> None:
     if not os.path.exists(path):
         return
@@ -139,6 +144,14 @@ def load_dotenv(path: str = ".env") -> None:
 
 def get_gemini_key() -> str | None:
     for key_name in ("GEMINI_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        value = os.environ.get(key_name)
+        if value:
+            return value
+    return None
+
+
+def get_ollama_key() -> str | None:
+    for key_name in ("OLLAMA_API_KEY", "OLLAMA_KEY"):
         value = os.environ.get(key_name)
         if value:
             return value
@@ -204,8 +217,8 @@ class GeminiClient:
             if "CERTIFICATE_VERIFY_FAILED" in reason:
                 reason += (
                     ". Your Python install cannot find trusted CA certificates. "
-                    "Fix the local certificate store, pass --gemini-ca-file, or use "
-                    "--gemini-insecure-skip-verify for local testing."
+                    "Fix the local certificate store, pass --llm-ca-file, or use "
+                    "--llm-insecure-skip-verify for local testing."
                 )
             raise RuntimeError(f"Could not reach Gemini: {reason}") from error
 
@@ -214,6 +227,69 @@ class GeminiClient:
             return "".join(part.get("text", "") for part in parts)
         except (KeyError, IndexError, TypeError) as error:
             raise RuntimeError(f"Unexpected Gemini response: {json.dumps(data)[:400]}") from error
+
+    def _ssl_context(self) -> ssl.SSLContext:
+        if self.insecure_skip_verify:
+            return ssl._create_unverified_context()
+        if self.ca_file:
+            return ssl.create_default_context(cafile=self.ca_file)
+        return ssl.create_default_context()
+
+
+class OllamaCloudClient:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        host: str = "https://ollama.com",
+        timeout: float = 30.0,
+        ca_file: str | None = None,
+        insecure_skip_verify: bool = False,
+    ) -> None:
+        self.api_key = api_key
+        self.model = model
+        self.host = host.rstrip("/")
+        self.timeout = timeout
+        self.ca_file = ca_file
+        self.insecure_skip_verify = insecure_skip_verify
+
+    def generate(self, prompt: str) -> str:
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "format": "json",
+            "options": {"temperature": 0.7, "top_p": 0.9},
+        }
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        request = urllib.request.Request(
+            f"{self.host}/api/chat",
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout, context=self._ssl_context()) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Ollama HTTP {error.code}: {body[:400]}") from error
+        except urllib.error.URLError as error:
+            reason = str(error.reason)
+            if "CERTIFICATE_VERIFY_FAILED" in reason:
+                reason += (
+                    ". Your Python install cannot find trusted CA certificates. "
+                    "Fix the local certificate store, pass --llm-ca-file, or use "
+                    "--llm-insecure-skip-verify for local testing."
+                )
+            raise RuntimeError(f"Could not reach Ollama: {reason}") from error
+
+        try:
+            return str(data["message"]["content"])
+        except (KeyError, TypeError) as error:
+            raise RuntimeError(f"Unexpected Ollama response: {json.dumps(data)[:400]}") from error
 
     def _ssl_context(self) -> ssl.SSLContext:
         if self.insecure_skip_verify:
@@ -312,6 +388,69 @@ class RconClient:
         return bytes(chunks)
 
 
+@dataclasses.dataclass(frozen=True)
+class ChatMessage:
+    player: str
+    message: str
+
+
+class MinecraftChatReader:
+    CHAT_PATTERNS = (
+        re.compile(r"\]: <([^>]+)> (.*)$"),
+        re.compile(r"\[CHAT\]\s+<([^>]+)>\s+(.*)$"),
+    )
+
+    def __init__(
+        self,
+        log_path: str,
+        player: str | None = None,
+        poll_seconds: float = 0.5,
+        start_at_end: bool = True,
+    ) -> None:
+        self.log_path = log_path
+        self.player = player
+        self.poll_seconds = poll_seconds
+        self.position = 0
+        if start_at_end and os.path.exists(log_path):
+            self.position = os.path.getsize(log_path)
+
+    def discard_pending(self) -> None:
+        if os.path.exists(self.log_path):
+            self.position = os.path.getsize(self.log_path)
+
+    def wait_for_answer(self) -> ChatMessage:
+        if not os.path.exists(self.log_path):
+            raise RuntimeError(f"Chat log does not exist: {self.log_path}")
+
+        while True:
+            with open(self.log_path, "r", encoding="utf-8", errors="replace") as log_file:
+                log_file.seek(self.position)
+                while True:
+                    line = log_file.readline()
+                    if not line:
+                        break
+                    parsed = parse_chat_log_line(line)
+                    if parsed and self._accepts(parsed):
+                        self.position = log_file.tell()
+                        return parsed
+                self.position = log_file.tell()
+            time.sleep(self.poll_seconds)
+
+    def _accepts(self, message: ChatMessage) -> bool:
+        if self.player and message.player.lower() != self.player.lower():
+            return False
+        return bool(message.message.strip())
+
+
+def parse_chat_log_line(line: str) -> ChatMessage | None:
+    stripped = line.rstrip()
+    for pattern in MinecraftChatReader.CHAT_PATTERNS:
+        match = pattern.search(stripped)
+        if match:
+            return ChatMessage(player=match.group(1), message=match.group(2).strip())
+    return None
+
+
 class MinecraftChaos:
     def __init__(self, send_command: Callable[[str], str], target: str, dry_run: bool) -> None:
         self.send_command = send_command
@@ -383,7 +522,8 @@ class MinecraftChaos:
         ]
 
     def announce(self, text: str) -> None:
-        self.run(f"say {text}")
+        for line in split_chat_message(text):
+            self.run(f"say {line}")
 
     def punish(self) -> str:
         self.wrong_answers += 1
@@ -655,6 +795,22 @@ class MinecraftChaos:
         return [f"give {self.target} minecraft:rotten_flesh 16"]
 
 
+def split_chat_message(text: str, limit: int = 220) -> list[str]:
+    words = text.split()
+    if not words:
+        return [""]
+    lines: list[str] = []
+    current = words[0]
+    for word in words[1:]:
+        if len(current) + 1 + len(word) > limit:
+            lines.append(current)
+            current = word
+        else:
+            current += f" {word}"
+    lines.append(current)
+    return lines
+
+
 class LocalTriviaAgent:
     def __init__(self, questions: list[Question]) -> None:
         self.questions = questions
@@ -697,8 +853,8 @@ class LocalTriviaAgent:
         )
 
 
-class GeminiTriviaAgent:
-    def __init__(self, client: GeminiClient, category: str) -> None:
+class LlmTriviaAgent:
+    def __init__(self, client: TextGenerator, category: str) -> None:
         self.client = client
         self.category = category
         self.streak = 0
@@ -737,7 +893,7 @@ Requirements:
         question_text = str(data.get("question", "")).strip()
         expected_answer = str(data.get("expected_answer", "")).strip()
         if not question_text or not expected_answer:
-            raise RuntimeError(f"Gemini produced an incomplete question: {data}")
+            raise RuntimeError(f"LLM produced an incomplete question: {data}")
         try:
             difficulty = int(data.get("difficulty", self.difficulty))
         except (TypeError, ValueError):
@@ -786,16 +942,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=25575, help="Minecraft RCON port.")
     parser.add_argument("--password", help="Minecraft RCON password. Prompts if omitted.")
     parser.add_argument("--target", default="@a", help="Minecraft target selector, e.g. @a, @p, or a username.")
+    parser.add_argument("--answer-player", help="Only accept answers from this Minecraft username.")
+    parser.add_argument("--chat-log", default="logs/latest.log", help="Minecraft server log to tail for player chat answers.")
+    parser.add_argument("--chat-poll-seconds", type=float, default=0.5, help="Seconds between chat log polls.")
     parser.add_argument("--questions", type=int, default=100, help="Number of trivia questions to ask.")
     parser.add_argument("--delay-seconds", type=float, default=180.0, help="Seconds to wait between questions.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands instead of connecting to Minecraft.")
     parser.add_argument("--seed", type=int, help="Random seed for repeatable testing.")
     parser.add_argument("--env-file", default=".env", help="Path to .env file containing GEMINI_KEY.")
+    parser.add_argument("--llm-provider", choices=("gemini", "ollama"), default="gemini", help="LLM provider for live questions and judging.")
+    parser.add_argument("--llm-ca-file", help="Path to a CA bundle if Python cannot verify HTTPS certificates.")
+    parser.add_argument("--llm-insecure-skip-verify", action="store_true", help="Disable LLM HTTPS certificate verification for local testing.")
     parser.add_argument("--gemini-model", default="gemini-3.7-flash", help="Gemini model used for question generation and judging.")
     parser.add_argument("--gemini-ca-file", help="Path to a CA bundle if Python cannot verify HTTPS certificates.")
     parser.add_argument("--gemini-insecure-skip-verify", action="store_true", help="Disable Gemini HTTPS certificate verification for local testing.")
+    parser.add_argument("--ollama-model", default="gpt-oss:120b", help="Ollama model used when --llm-provider ollama.")
+    parser.add_argument("--ollama-host", default="https://ollama.com", help="Ollama API host. Use http://localhost:11434 for local Ollama.")
     parser.add_argument("--category", default="general trivia", help="Question category preference.")
-    parser.add_argument("--offline-questions", action="store_true", help="Use the built-in question bank instead of Gemini.")
+    parser.add_argument("--offline-questions", action="store_true", help="Use the built-in question bank instead of an LLM.")
     return parser.parse_args(argv)
 
 
@@ -808,6 +972,32 @@ def make_command_sender(args: argparse.Namespace) -> tuple[Callable[[str], str],
     return client.command, client
 
 
+def make_llm_client(args: argparse.Namespace) -> TextGenerator:
+    ca_file = args.llm_ca_file or args.gemini_ca_file
+    insecure_skip_verify = args.llm_insecure_skip_verify or args.gemini_insecure_skip_verify
+    if args.llm_provider == "gemini":
+        gemini_key = get_gemini_key()
+        if not gemini_key:
+            raise RuntimeError("Missing Gemini API key. Add GEMINI_KEY=... to .env or run with --offline-questions.")
+        return GeminiClient(
+            gemini_key,
+            args.gemini_model,
+            ca_file=ca_file,
+            insecure_skip_verify=insecure_skip_verify,
+        )
+
+    ollama_key = get_ollama_key()
+    if args.ollama_host.startswith("https://ollama.com") and not ollama_key:
+        raise RuntimeError("Missing Ollama API key. Add OLLAMA_API_KEY=... to .env or use --ollama-host http://localhost:11434.")
+    return OllamaCloudClient(
+        ollama_key or "",
+        args.ollama_model,
+        host=args.ollama_host,
+        ca_file=ca_file,
+        insecure_skip_verify=insecure_skip_verify,
+    )
+
+
 def main() -> int:
     args = parse_args()
     if args.seed is not None:
@@ -815,24 +1005,14 @@ def main() -> int:
     load_dotenv(args.env_file)
 
     if args.offline_questions:
-        agent: LocalTriviaAgent | GeminiTriviaAgent = LocalTriviaAgent(LOCAL_QUESTION_BANK)
+        agent: LocalTriviaAgent | LlmTriviaAgent = LocalTriviaAgent(LOCAL_QUESTION_BANK)
     else:
-        gemini_key = get_gemini_key()
-        if not gemini_key:
-            print(
-                "Missing Gemini API key. Add GEMINI_KEY=... to .env or run with --offline-questions.",
-                file=sys.stderr,
-            )
+        try:
+            llm_client = make_llm_client(args)
+        except RuntimeError as error:
+            print(str(error), file=sys.stderr)
             return 2
-        agent = GeminiTriviaAgent(
-            GeminiClient(
-                gemini_key,
-                args.gemini_model,
-                ca_file=args.gemini_ca_file,
-                insecure_skip_verify=args.gemini_insecure_skip_verify,
-            ),
-            category=args.category,
-        )
+        agent = LlmTriviaAgent(llm_client, category=args.category)
 
     try:
         send_command, client = make_command_sender(args)
@@ -844,19 +1024,34 @@ def main() -> int:
         return 2
 
     chaos = MinecraftChaos(send_command=send_command, target=args.target, dry_run=args.dry_run)
+    chat_reader = MinecraftChatReader(
+        args.chat_log,
+        player=args.answer_player,
+        poll_seconds=args.chat_poll_seconds,
+    )
 
     try:
         chaos.announce("AI trivia chaos is live. Wrong answers roll random punishments.")
+        if args.answer_player:
+            chaos.announce(f"Only answers from {args.answer_player} will count.")
+        else:
+            chaos.announce("The next player chat message after each question counts as the answer.")
         for index in range(1, args.questions + 1):
             try:
                 question = agent.next_question()
             except RuntimeError as error:
                 print(f"Could not generate question: {error}", file=sys.stderr)
                 return 2
-            print(f"\nQuestion {index}/{args.questions} | Difficulty {agent.difficulty}/10")
-            print(question.prompt)
-            user_answer = input("> ")
-            if user_answer.strip().lower() in {"quit", "exit"}:
+            chat_reader.discard_pending()
+            chaos.announce(f"Question {index}/{args.questions}. Difficulty {agent.difficulty}/10.")
+            chaos.announce(question.prompt)
+            try:
+                chat_message = chat_reader.wait_for_answer()
+            except RuntimeError as error:
+                print(str(error), file=sys.stderr)
+                return 2
+            user_answer = chat_message.message
+            if user_answer.strip().lower() in {"quit", "exit", "!quit", "!exit"}:
                 chaos.announce("Trivia chaos ended early.")
                 break
             try:
@@ -865,15 +1060,15 @@ def main() -> int:
                 print(f"Could not judge answer: {error}", file=sys.stderr)
                 return 2
             agent.record_answer(judgement.correct)
-            print(judgement.message)
+            chaos.announce(f"{chat_message.player} answered: {user_answer}")
+            chaos.announce(judgement.message)
             if judgement.correct:
                 chaos.reward()
             else:
-                print(f"Expected answer: {judgement.expected_answer}")
-                punishment = chaos.punish()
-                print(f"Punishment: {punishment}")
+                chaos.announce(f"Expected answer: {judgement.expected_answer}")
+                chaos.punish()
             if index < args.questions and args.delay_seconds > 0:
-                print(f"Waiting {args.delay_seconds:g} seconds before the next question...")
+                chaos.announce(f"Next question in {args.delay_seconds:g} seconds.")
                 time.sleep(args.delay_seconds)
         chaos.announce("Trivia chaos complete.")
     finally:
