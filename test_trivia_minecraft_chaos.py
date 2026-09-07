@@ -1,4 +1,3 @@
-import os
 import unittest
 
 from trivia_minecraft_chaos import (
@@ -11,10 +10,8 @@ from trivia_minecraft_chaos import (
     LOCAL_QUESTION_BANK,
     answer_matches,
     normalize_api_key,
-    normalize_ollama_host,
     parse_args,
     parse_chat_log_line,
-    truthy,
 )
 
 
@@ -106,26 +103,6 @@ class TriviaChaosTests(unittest.TestCase):
     def test_normalize_api_key_strips_bearer_prefix(self) -> None:
         self.assertEqual(normalize_api_key("Bearer abc123"), "abc123")
         self.assertEqual(normalize_api_key('"abc123"'), "abc123")
-
-    def test_normalize_ollama_host_strips_api_suffix(self) -> None:
-        self.assertEqual(normalize_ollama_host("https://ollama.com/api/chat"), "https://ollama.com")
-        self.assertEqual(normalize_ollama_host("http://localhost:11434/api"), "http://localhost:11434")
-
-    def test_truthy_matches_working_helper_values(self) -> None:
-        self.assertTrue(truthy("true"))
-        self.assertTrue(truthy("1"))
-        self.assertFalse(truthy(""))
-
-    def test_ollama_host_defaults_to_env_driven_behavior(self) -> None:
-        old_cloud = os.environ.pop("OLLAMA_CLOUD", None)
-        try:
-            args = parse_args(["--llm-provider", "ollama"])
-            self.assertIsNone(args.ollama_host)
-            self.assertIsNone(args.ollama_model)
-            self.assertFalse(args.ollama_cloud)
-        finally:
-            if old_cloud is not None:
-                os.environ["OLLAMA_CLOUD"] = old_cloud
 
     def test_gemini_client_can_build_unverified_ssl_context(self) -> None:
         client = GeminiClient("key", "model", insecure_skip_verify=True)

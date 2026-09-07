@@ -158,34 +158,6 @@ def get_ollama_key() -> str | None:
     return None
 
 
-def truthy(value: str | None) -> bool:
-    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
-
-
-def normalize_ollama_host(value: str) -> str:
-    host = value.strip().rstrip("/")
-    for suffix in ("/api/chat", "/api/generate", "/api/show", "/api/tags", "/api"):
-        if host.endswith(suffix):
-            return host[: -len(suffix)]
-    return host
-
-
-def get_env_ollama_host() -> str:
-    host = os.environ.get("OLLAMA_HOST")
-    if host:
-        return normalize_ollama_host(host)
-    if truthy(os.environ.get("OLLAMA_CLOUD")):
-        return "https://ollama.com"
-    api_url = os.environ.get("OLLAMA_API_URL")
-    if api_url:
-        return normalize_ollama_host(api_url)
-    return ""
-
-
-def get_env_ollama_model(default: str = "llama3.2:1b") -> str:
-    return os.environ.get("OLLAMA_MODEL", default)
-
-
 def normalize_api_key(value: str) -> str:
     cleaned = value.strip().strip('"').strip("'")
     if cleaned.lower().startswith("bearer "):
@@ -276,52 +248,19 @@ class OllamaCloudClient:
         self,
         api_key: str,
         model: str,
-        host: str = "",
+        host: str = "https://ollama.com",
         timeout: float = 30.0,
         ca_file: str | None = None,
         insecure_skip_verify: bool = False,
     ) -> None:
         self.api_key = api_key
         self.model = model
-        self.host = normalize_ollama_host(host) if host else ""
+        self.host = host.rstrip("/")
         self.timeout = timeout
         self.ca_file = ca_file
         self.insecure_skip_verify = insecure_skip_verify
 
     def generate(self, prompt: str) -> str:
-        try:
-            return self._generate_with_official_client(prompt)
-        except ImportError:
-            return self._generate_with_urllib(prompt)
-
-    def _generate_with_official_client(self, prompt: str) -> str:
-        from ollama import Client
-
-        headers = self._headers()
-        kwargs: dict[str, object] = {}
-        if self.host:
-            kwargs["host"] = self.host
-        if headers:
-            kwargs["headers"] = headers
-        client = Client(**kwargs)
-        response = client.chat(
-            self.model,
-            messages=[{"role": "user", "content": prompt}],
-            stream=False,
-            format="json",
-            options={"temperature": 0.7, "top_p": 0.9},
-        )
-        message = response.get("message") if isinstance(response, dict) else getattr(response, "message", None)
-        if isinstance(message, dict):
-            content = message.get("content")
-        else:
-            content = getattr(message, "content", None)
-        if not content:
-            raise RuntimeError(f"Unexpected Ollama response: {response}")
-        return str(content)
-
-    def _generate_with_urllib(self, prompt: str) -> str:
-        host = self.host or "http://localhost:11434"
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -329,9 +268,11 @@ class OllamaCloudClient:
             "format": "json",
             "options": {"temperature": 0.7, "top_p": 0.9},
         }
-        headers = {"Content-Type": "application/json", **self._headers()}
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         request = urllib.request.Request(
-            f"{host}/api/chat",
+            f"{self.host}/api/chat",
             data=json.dumps(payload).encode("utf-8"),
             headers=headers,
             method="POST",
@@ -362,11 +303,6 @@ class OllamaCloudClient:
             return str(data["message"]["content"])
         except (KeyError, TypeError) as error:
             raise RuntimeError(f"Unexpected Ollama response: {json.dumps(data)[:400]}") from error
-
-    def _headers(self) -> dict[str, str]:
-        if not self.api_key:
-            return {}
-        return {"Authorization": f"Bearer {self.api_key}"}
 
     def check_auth(self) -> None:
         try:
@@ -1047,9 +983,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--gemini-model", default="gemini-3.7-flash", help="Gemini model used for question generation and judging.")
     parser.add_argument("--gemini-ca-file", help="Path to a CA bundle if Python cannot verify HTTPS certificates.")
     parser.add_argument("--gemini-insecure-skip-verify", action="store_true", help="Disable Gemini HTTPS certificate verification for local testing.")
-    parser.add_argument("--ollama-model", help="Ollama model used when --llm-provider ollama. Defaults to OLLAMA_MODEL or llama3.2:1b.")
-    parser.add_argument("--ollama-host", help="Ollama host. Defaults like ollama.Client: local daemon unless OLLAMA_HOST, OLLAMA_API_URL, or OLLAMA_CLOUD is set.")
-    parser.add_argument("--ollama-cloud", action="store_true", help="Use Ollama Cloud at https://ollama.com.")
+    parser.add_argument("--ollama-model", default="gpt-oss:120b", help="Ollama model used when --llm-provider ollama.")
+    parser.add_argument("--ollama-host", default="https://ollama.com", help="Ollama API host. Use http://localhost:11434 for local Ollama.")
     parser.add_argument("--category", default="general trivia", help="Question category preference.")
     parser.add_argument("--offline-questions", action="store_true", help="Use the built-in question bank instead of an LLM.")
     return parser.parse_args(argv)
@@ -1079,14 +1014,12 @@ def make_llm_client(args: argparse.Namespace) -> TextGenerator:
         )
 
     ollama_key = get_ollama_key()
-    ollama_host = "https://ollama.com" if args.ollama_cloud else (args.ollama_host or get_env_ollama_host())
-    ollama_model = args.ollama_model or get_env_ollama_model()
-    if ollama_host.startswith("https://ollama.com") and not ollama_key:
+    if args.ollama_host.startswith("https://ollama.com") and not ollama_key:
         raise RuntimeError("Missing Ollama API key. Add OLLAMA_API_KEY=... to .env or use --ollama-host http://localhost:11434.")
     return OllamaCloudClient(
         ollama_key or "",
-        ollama_model,
-        host=ollama_host,
+        args.ollama_model,
+        host=args.ollama_host,
         ca_file=ca_file,
         insecure_skip_verify=insecure_skip_verify,
     )
