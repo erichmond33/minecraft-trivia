@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
-import getpass
 import os
 import random
 import re
@@ -966,7 +965,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Minecraft trivia chaos via RCON.")
     parser.add_argument("--host", default="127.0.0.1", help="Minecraft RCON host.")
     parser.add_argument("--port", type=int, default=25575, help="Minecraft RCON port.")
-    parser.add_argument("--password", help="Minecraft RCON password. Prompts if omitted.")
+    parser.add_argument("--password", default="2006", help="Minecraft RCON password.")
     parser.add_argument("--target", default="@a", help="Minecraft target selector, e.g. @a, @p, or a username.")
     parser.add_argument("--answer-player", help="Only accept answers from this Minecraft username.")
     parser.add_argument("--chat-log", default="logs/latest.log", help="Minecraft server log to tail for player chat answers.")
@@ -975,8 +974,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--delay-seconds", type=float, default=180.0, help="Seconds to wait between questions.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands instead of connecting to Minecraft.")
     parser.add_argument("--seed", type=int, help="Random seed for repeatable testing.")
-    parser.add_argument("--env-file", default=".env", help="Path to .env file containing GEMINI_KEY.")
-    parser.add_argument("--llm-provider", choices=("gemini", "ollama"), default="gemini", help="LLM provider for live questions and judging.")
+    parser.add_argument("--env-file", default=".env", help="Path to .env file containing API keys.")
+    parser.add_argument("--llm-provider", choices=("gemini", "ollama"), default="ollama", help="LLM provider for live questions and judging.")
     parser.add_argument("--check-llm-auth", action="store_true", help="Check the selected LLM credentials and exit.")
     parser.add_argument("--llm-ca-file", help="Path to a CA bundle if Python cannot verify HTTPS certificates.")
     parser.add_argument("--llm-insecure-skip-verify", action="store_true", help="Disable LLM HTTPS certificate verification for local testing.")
@@ -993,8 +992,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def make_command_sender(args: argparse.Namespace) -> tuple[Callable[[str], str], RconClient | None]:
     if args.dry_run:
         return lambda command: print(f"[minecraft] {command}") or "", None
-    password = args.password or getpass.getpass("RCON password: ")
-    client = RconClient(args.host, args.port, password)
+    client = RconClient(args.host, args.port, args.password)
     client.connect()
     return client.command, client
 

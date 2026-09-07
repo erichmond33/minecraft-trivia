@@ -78,6 +78,12 @@ class TriviaChaosTests(unittest.TestCase):
         args = parse_args([])
         self.assertEqual(args.questions, 100)
 
+    def test_defaults_to_ollama_cloud_and_rcon_password(self) -> None:
+        args = parse_args([])
+        self.assertEqual(args.llm_provider, "ollama")
+        self.assertEqual(args.ollama_host, "https://ollama.com")
+        self.assertEqual(args.password, "2006")
+
     def test_gemini_tls_flags_are_parsed(self) -> None:
         args = parse_args(["--gemini-ca-file", "certs.pem", "--gemini-insecure-skip-verify"])
         self.assertEqual(args.gemini_ca_file, "certs.pem")

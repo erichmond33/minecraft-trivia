@@ -29,7 +29,7 @@ In `server.properties`, enable RCON:
 ```properties
 enable-rcon=true
 rcon.port=25575
-rcon.password=change-this-password
+rcon.password=2006
 ```
 
 Restart the server after editing that file.
@@ -57,13 +57,13 @@ python3 trivia_minecraft_chaos.py --dry-run --offline-questions --questions 5 --
 Run against a local server with Gemini:
 
 ```bash
-python3 trivia_minecraft_chaos.py --password change-this-password --target @a
+python3 trivia_minecraft_chaos.py --llm-provider gemini --target @a
 ```
 
-Run against a local server with Ollama Cloud:
+Run against a local server with default Ollama Cloud and default RCON password `2006`:
 
 ```bash
-python3 trivia_minecraft_chaos.py --llm-provider ollama --ollama-model gpt-oss:120b --password change-this-password --target @a
+python3 trivia_minecraft_chaos.py --target @a
 ```
 
 Check Ollama Cloud auth before starting the game:
@@ -75,19 +75,20 @@ python3 trivia_minecraft_chaos.py --llm-provider ollama --check-llm-auth --llm-i
 Run with local Ollama:
 
 ```bash
-python3 trivia_minecraft_chaos.py --llm-provider ollama --ollama-host http://localhost:11434 --ollama-model llama3.1 --password change-this-password --target @a
+python3 trivia_minecraft_chaos.py --ollama-host http://localhost:11434 --ollama-model llama3.1 --target @a
 ```
 
 Useful options:
 
 - `--target @p` punishes only the nearest player.
 - `--target PlayerName` punishes one player by name.
+- `--password 2006` changes the RCON password. The default is `2006`.
 - `--answer-player PlayerName` only accepts answers from one Minecraft username.
 - `--chat-log logs/latest.log` chooses the server log to read chat answers from.
 - `--questions 50` changes the session length. The default is `100`.
 - `--delay-seconds 30` waits 30 seconds between questions. The default is `180`, or 3 minutes.
 - `--category "Minecraft and science"` nudges the LLM toward a category.
-- `--llm-provider ollama` uses Ollama instead of Gemini.
+- `--llm-provider ollama` uses Ollama instead of Gemini. The default is `ollama`.
 - `--gemini-model gemini-3.7-flash` changes the model.
 - `--ollama-model gpt-oss:120b` changes the Ollama model.
 - `--ollama-host https://ollama.com` changes the Ollama API host.
