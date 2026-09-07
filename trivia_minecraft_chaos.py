@@ -568,6 +568,8 @@ class MinecraftChaos:
             self.punishments = self.build_wacky_punishments()
         elif punishment_mode == "wacky2":
             self.punishments = self.build_wacky2_punishments()
+        elif punishment_mode == "wacky3":
+            self.punishments = self.build_wacky3_punishments()
 
     def build_wacky_punishments(self) -> list[tuple[str, Callable[[], CommandPlan]]]:
         return [
@@ -626,6 +628,36 @@ class MinecraftChaos:
             ("Armor-stand press conference", self.wacky2_armor_stand_press_conference),
             ("Village festival nobody approved", self.wacky2_village_festival),
             ("Reality compiler error grand finale", self.wacky2_reality_compiler_error),
+        ]
+
+    def build_wacky3_punishments(self) -> list[tuple[str, Callable[[], CommandPlan]]]:
+        """Redstone-first spectacle: real mechanisms, absurd signal chains, low lethality."""
+        return [
+            ("Cathedral organ sequencer", self.wacky3_cathedral_organ),
+            ("Piston wave parliament", self.wacky3_piston_wave_parliament),
+            ("Hopper clock observatory", self.wacky3_hopper_clock_observatory),
+            ("Minecart signal roundabout", self.wacky3_minecart_signal_roundabout),
+            ("Flying machine inspection gantry", self.wacky3_flying_machine_inspection),
+            ("Seven-segment 404 tribunal", self.wacky3_seven_segment_404),
+            ("Observer domino serpent", self.wacky3_observer_domino_serpent),
+            ("Dropper Rube Goldberg mailroom", self.wacky3_dropper_rube_goldberg),
+            ("Item sorter appeals office", self.wacky3_item_sorter_appeals),
+            ("Piston iris bureaucracy portal", self.wacky3_piston_iris_portal),
+            ("Elevator to nowhere", self.wacky3_elevator_to_nowhere),
+            ("Comparator analog mood laboratory", self.wacky3_comparator_mood_meter),
+            ("RS latch argument chamber", self.wacky3_rs_latch_argument),
+            ("Dropper T-flip-flop indecision hall", self.wacky3_t_flip_flop_hall),
+            ("Four-bit binary shame counter", self.wacky3_binary_shame_counter),
+            ("Comparator pulse-extender time tunnel", self.wacky3_pulse_extender_tunnel),
+            ("Redstone randomizer casino audit", self.wacky3_randomizer_casino),
+            ("Piston tape billboard malfunction", self.wacky3_piston_tape_billboard),
+            ("Piston door factory acceptance test", self.wacky3_door_factory),
+            ("Lamp matrix scanner overload", self.wacky3_lamp_matrix_scanner),
+            ("Minecart logic junction committee", self.wacky3_minecart_logic_junction),
+            ("Bell and note-block relay tower", self.wacky3_bell_relay_tower),
+            ("Slime-block mechanical heart", self.wacky3_slime_mechanical_heart),
+            ("Redstone logic-gate calculator cosplay", self.wacky3_logic_gate_calculator),
+            ("Grand unified Rube Goldberg cathedral", self.wacky3_grand_rube_goldberg),
         ]
 
     def wacky2_tell(self, text: str, color: str = "aqua") -> str:
@@ -710,6 +742,132 @@ class MinecraftChaos:
             self.stage(0.996, f"title {self.target} clear"),
         ]
 
+    def wacky3_at(self, command: str) -> str:
+        return f"execute at @e[type=minecraft:marker,tag=wacky3_anchor] run {command}"
+
+    def wacky3_set(self, x: int, y: int, z: int, block: str, mode: str = "replace") -> str:
+        return self.wacky3_at(f"setblock ~{x} ~{y} ~{z} minecraft:{block} {mode}")
+
+    def wacky3_fill(
+        self,
+        x1: int,
+        y1: int,
+        z1: int,
+        x2: int,
+        y2: int,
+        z2: int,
+        block: str,
+        mode: str = "replace",
+    ) -> str:
+        return self.wacky3_at(
+            f"fill ~{x1} ~{y1} ~{z1} ~{x2} ~{y2} ~{z2} minecraft:{block} {mode}"
+        )
+
+    def wacky3_item_replace(self, x: int, y: int, z: int, slot: int, item: str, count: int = 1) -> str:
+        return self.wacky3_at(
+            f"item replace block ~{x} ~{y} ~{z} container.{slot} with minecraft:{item} {count}"
+        )
+
+    def wacky3_pulse(self, x: int, y: int, z: int, start: float, duration: float = 0.025) -> CommandPlan:
+        return [
+            self.stage(start, self.wacky3_set(x, y, z, "redstone_block")),
+            self.stage(min(0.90, start + duration), self.wacky3_set(x, y, z, "air")),
+        ]
+
+    def wacky3_temp_entity(self, entity: str, x: int, y: int, z: int, nbt: str = "") -> str:
+        extra = nbt.strip()
+        if extra.startswith("{") and extra.endswith("}"):
+            extra = extra[1:-1].strip()
+        tags = 'Tags:["wacky3_temp"]'
+        payload = "{" + tags + ("," + extra if extra else "") + "}"
+        return self.wacky3_at(f"summon minecraft:{entity} ~{x} ~{y} ~{z} {payload}")
+
+    def wacky3_opening(self, title: str, subtitle: str) -> CommandPlan:
+        title_json = json.dumps({"text": title, "color": "red", "bold": True})
+        subtitle_json = json.dumps({"text": subtitle, "color": "gold", "italic": True})
+        return [
+            "kill @e[type=minecraft:marker,tag=wacky3_anchor]",
+            "kill @e[tag=wacky3_temp]",
+            f"effect give {self.target} minecraft:resistance 240 4 true",
+            f"effect give {self.target} minecraft:regeneration 240 2 true",
+            f"effect give {self.target} minecraft:absorption 240 4 true",
+            f"effect give {self.target} minecraft:fire_resistance 240 0 true",
+            f"effect give {self.target} minecraft:slow_falling 240 0 true",
+            f"execute as {self.target} at @s run summon minecraft:marker ~ ~ ~ {{Tags:[\"wacky3_anchor\"]}}",
+            f"title {self.target} times 3 60 8",
+            f"title {self.target} title {title_json}",
+            f"title {self.target} subtitle {subtitle_json}",
+            self.wacky2_sound("block.piston.extend", 0.65, 1.2),
+            self.wacky2_sound("block.note_block.bit", 1.45, 1.0),
+            self.wacky2_tell("WACKY-3: REDSTONE ENGINEERING DEPARTMENT HAS ASSUMED CONTROL.", "red"),
+            self.wacky3_fill(-18, 7, -18, 18, 7, 18, "smooth_quartz", "keep"),
+            self.wacky3_fill(-18, 8, -18, 18, 8, 18, "redstone_lamp", "keep"),
+            self.wacky3_fill(-17, 8, -17, 17, 8, 17, "smooth_quartz", "replace"),
+        ]
+
+    def wacky3_cleanup_commands(self) -> list[str]:
+        blocks = [
+            "redstone_wire", "redstone_torch", "redstone_wall_torch", "repeater", "comparator",
+            "observer", "piston", "sticky_piston", "redstone_block", "redstone_lamp", "note_block",
+            "hopper", "dropper", "dispenser", "rail", "powered_rail", "detector_rail", "activator_rail",
+            "target", "bell", "barrel", "lever", "stone_button", "oak_button", "stone_pressure_plate",
+            "oak_pressure_plate", "iron_trapdoor", "slime_block", "honey_block", "smooth_quartz",
+            "tinted_glass", "glass", "white_stained_glass", "red_stained_glass", "blue_stained_glass",
+            "lime_stained_glass", "black_concrete", "white_concrete", "red_concrete", "blue_concrete",
+            "yellow_concrete", "lime_concrete", "orange_concrete", "purple_concrete", "magenta_concrete",
+            "cyan_concrete", "gold_block", "clay", "packed_ice", "bone_block", "iron_block", "copper_block",
+            "white_wool", "red_wool", "blue_wool", "lime_wool", "yellow_wool", "orange_wool",
+            "magenta_wool", "purple_wool", "cyan_wool", "light_blue_wool", "composter",
+        ]
+        return [
+            self.wacky3_at(f"fill ~-19 ~7 ~-19 ~19 ~25 ~19 minecraft:air replace minecraft:{block}")
+            for block in blocks
+        ]
+
+    def wacky3_finale(self, line: str) -> CommandPlan:
+        plan: CommandPlan = [
+            self.stage(0.91, self.wacky2_particles("electric_spark", 220, 5.0, 0.22)),
+            self.stage(0.92, self.wacky2_sound("block.note_block.pling", 1.9, 1.3)),
+            self.stage(0.925, self.wacky2_tell(line, "gold")),
+        ]
+        plan.extend(self.stage(0.95, command) for command in self.wacky3_cleanup_commands())
+        plan.extend([
+            self.stage(0.975, "kill @e[tag=wacky3_temp]"),
+            self.stage(0.98, "kill @e[type=minecraft:marker,tag=wacky3_anchor]"),
+            self.stage(0.985, f"effect clear {self.target} minecraft:slow_falling"),
+            self.stage(0.988, f"effect clear {self.target} minecraft:absorption"),
+            self.stage(0.991, f"effect clear {self.target} minecraft:regeneration"),
+            self.stage(0.994, f"effect clear {self.target} minecraft:resistance"),
+            self.stage(0.996, f"effect clear {self.target} minecraft:fire_resistance"),
+            self.stage(0.998, f"title {self.target} clear"),
+        ])
+        return plan
+
+    def wacky3_support_line(self, x1: int, x2: int, y: int, z: int, block: str = "smooth_quartz") -> list[str]:
+        return [self.wacky3_set(x, y, z, block) for x in range(x1, x2 + 1)]
+
+    def wacky3_lamp_digit(self, origin_x: int, origin_y: int, z: int, digit: int) -> list[str]:
+        segments = {
+            0: "ab cdef".replace(" ", ""), 1: "bc", 2: "abdeg", 3: "abcdg", 4: "bcfg",
+            5: "acdfg", 6: "acdefg", 7: "abc", 8: "abcdefg", 9: "abcdfg",
+        }[digit]
+        coords = {
+            "a": [(1, 6), (2, 6), (3, 6)],
+            "b": [(4, 5), (4, 4)],
+            "c": [(4, 2), (4, 1)],
+            "d": [(1, 0), (2, 0), (3, 0)],
+            "e": [(0, 2), (0, 1)],
+            "f": [(0, 5), (0, 4)],
+            "g": [(1, 3), (2, 3), (3, 3)],
+        }
+        commands: list[str] = []
+        for segment, points in coords.items():
+            for dx, dy in points:
+                block = "redstone_lamp[lit=true]" if segment in segments else "redstone_lamp[lit=false]"
+                commands.append(self.wacky3_set(origin_x + dx, origin_y + dy, z, block))
+                commands.append(self.wacky3_set(origin_x + dx, origin_y + dy, z + 1, "redstone_block" if segment in segments else "black_concrete"))
+        return commands
+
     def announce(self, text: str) -> None:
         for line in split_chat_message(text):
             self.run(f"say {line}")
@@ -729,6 +887,31 @@ class MinecraftChaos:
     def run_punishment(self, commands: CommandPlan, delay_budget_seconds: float = 0.0) -> float:
         self.wrong_answers += 1
         started_at = time.monotonic()
+
+        # Wacky-3 plans deliberately contain hundreds of construction commands plus timed
+        # activations. Build the entire redstone machine first, then start its animation clock.
+        # Stable sorting preserves author order for events with the same delay fraction.
+        if self.punishment_mode == "wacky3":
+            immediate = [step for step in commands if not isinstance(step, CommandStep)]
+            staged = sorted(
+                (step for step in commands if isinstance(step, CommandStep)),
+                key=lambda step: step.delay_fraction,
+            )
+            for command in immediate:
+                self.run(command)
+                if self.command_pause_seconds > 0:
+                    time.sleep(self.command_pause_seconds)
+            animation_started_at = time.monotonic()
+            for step in staged:
+                target_elapsed = max(0.0, min(step.delay_fraction, 1.0)) * max(0.0, delay_budget_seconds)
+                current_elapsed = time.monotonic() - animation_started_at
+                if target_elapsed > current_elapsed:
+                    time.sleep(target_elapsed - current_elapsed)
+                self.run(step.command)
+                if self.command_pause_seconds > 0:
+                    time.sleep(self.command_pause_seconds)
+            return time.monotonic() - started_at
+
         for step in commands:
             if isinstance(step, CommandStep):
                 target_elapsed = max(0.0, min(step.delay_fraction, 1.0)) * max(0.0, delay_budget_seconds)
@@ -1962,6 +2145,629 @@ class MinecraftChaos:
         ]
 
 
+    def wacky3_cathedral_organ(self) -> CommandPlan:
+        plan: CommandPlan = [
+            *self.wacky3_opening("REDSTONE CATHEDRAL ORGAN", "Four sequencers. Forty notes. Absolutely no restraint."),
+            self.wacky2_tell("Building a repeater-fed note-block organ above your head.", "yellow"),
+        ]
+        row_data = [(-12, -9, "gold_block", 3), (-12, -3, "clay", 8), (-12, 3, "packed_ice", 13), (-12, 9, "bone_block", 18)]
+        for row, (start_x, z, support, base_note) in enumerate(row_data):
+            for i in range(10):
+                x = start_x + i * 2
+                plan.extend([
+                    self.wacky3_set(x, 10, z, support),
+                    self.wacky3_set(x, 11, z, f"repeater[facing=east,delay={(i % 4) + 1}]"),
+                    self.wacky3_set(x + 1, 10, z, "smooth_quartz"),
+                    self.wacky3_set(x + 1, 11, z, "redstone_wire"),
+                    self.wacky3_set(x + 1, 10, z + 1, support),
+                    self.wacky3_set(x + 1, 11, z + 1, f"note_block[note={(base_note + i * 2) % 25}]"),
+                    self.wacky3_set(x + 1, 11, z - 1, "redstone_lamp"),
+                ])
+            plan.extend(self.wacky3_pulse(start_x - 1, 11, z, 0.12 + row * 0.12, 0.04))
+        for t, pitch in [(0.16, 0.7), (0.31, 1.0), (0.46, 1.3), (0.61, 1.7)]:
+            plan.append(self.stage(t, self.wacky2_sound("block.note_block.bell", pitch, 1.2)))
+        plan.extend(self.wacky3_finale("The organ has rendered your wrong answer in four-part harmony."))
+        return plan
+
+    def wacky3_piston_wave_parliament(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("PISTON WAVE PARLIAMENT", "Sixty-four pistons will now vote on your answer.")]
+        colors = ["red_concrete", "orange_concrete", "yellow_concrete", "lime_concrete"]
+        for row, z in enumerate((-9, -3, 3, 9)):
+            for i, x in enumerate(range(-15, 16, 2)):
+                plan.extend([
+                    self.wacky3_set(x, 9, z, "sticky_piston[facing=up]"),
+                    self.wacky3_set(x, 10, z, colors[row]),
+                    self.wacky3_set(x, 9, z + 1, "redstone_wire"),
+                    self.wacky3_set(x, 8, z + 1, "smooth_quartz"),
+                    self.stage(0.10 + row * 0.10 + i * 0.012, self.wacky3_set(x, 8, z, "redstone_block")),
+                    self.stage(0.15 + row * 0.10 + i * 0.012, self.wacky3_set(x, 8, z, "air")),
+                ])
+        plan.extend([
+            self.stage(0.34, self.wacky2_particles("electric_spark", 260, 8.0, 0.18)),
+            self.stage(0.55, self.wacky2_tell("Motion carried: your answer has been mechanically overruled.", "aqua")),
+        ])
+        plan.extend(self.wacky3_finale("Parliament adjourned after 64 extremely physical votes."))
+        return plan
+
+    def wacky3_hopper_clock_observatory(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("HOPPER CLOCK OBSERVATORY", "Four silent clocks orbit one extremely loud mistake.")]
+        origins = [(-10, -10), (8, -10), (-10, 8), (8, 8)]
+        for index, (ox, oz) in enumerate(origins):
+            y = 11
+            plan.extend([
+                self.wacky3_set(ox, y, oz, "hopper[facing=east]"),
+                self.wacky3_set(ox + 1, y, oz, "hopper[facing=south]"),
+                self.wacky3_set(ox + 1, y, oz + 1, "hopper[facing=west]"),
+                self.wacky3_set(ox, y, oz + 1, "hopper[facing=north]"),
+                self.wacky3_item_replace(ox, y, oz, 0, "redstone_torch", 1),
+                self.wacky3_set(ox - 1, y, oz, "comparator[facing=west]"),
+                self.wacky3_set(ox + 2, y, oz, "comparator[facing=east]"),
+                self.wacky3_set(ox + 1, y, oz + 2, "comparator[facing=south]"),
+                self.wacky3_set(ox, y, oz - 1, "comparator[facing=north]"),
+                self.wacky3_set(ox - 2, y, oz, "redstone_lamp"),
+                self.wacky3_set(ox + 3, y, oz, "redstone_lamp"),
+                self.wacky3_set(ox + 1, y, oz + 3, "redstone_lamp"),
+                self.wacky3_set(ox, y, oz - 2, "redstone_lamp"),
+            ])
+            plan.append(self.stage(0.18 + index * 0.11, self.wacky2_sound("block.note_block.hat", 0.8 + index * 0.25, 0.9)))
+        plan.extend([
+            self.stage(0.38, self.wacky2_tell("The clocks are transferring one item around four loops because one clock was apparently insufficient.", "yellow")),
+            self.stage(0.68, self.wacky2_particles("enchant", 240, 7.0, 0.15)),
+        ])
+        plan.extend(self.wacky3_finale("Time itself has filed a redstone incident report."))
+        return plan
+
+    def wacky3_minecart_signal_roundabout(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("MINECART SIGNAL ROUNDABOUT", "Detector rails now control an unnecessarily ceremonial traffic system.")]
+        y = 11
+        plan.append(self.wacky3_fill(-9, 10, -9, 9, 10, 9, "smooth_quartz", "keep"))
+        for x in range(-7, 8):
+            block = "detector_rail[shape=east_west]" if x in (-4, 0, 4) else "powered_rail[shape=east_west,powered=true]"
+            plan.extend([self.wacky3_set(x, y, -8, block), self.wacky3_set(x, y, 8, block)])
+        for z in range(-7, 8):
+            block = "detector_rail[shape=north_south]" if z in (-4, 0, 4) else "powered_rail[shape=north_south,powered=true]"
+            plan.extend([self.wacky3_set(-8, y, z, block), self.wacky3_set(8, y, z, block)])
+        corners = [(-8, -8, "south_east"), (8, -8, "south_west"), (8, 8, "north_west"), (-8, 8, "north_east")]
+        for x, z, shape in corners:
+            plan.extend([self.wacky3_set(x, y, z, f"rail[shape={shape}]"), self.wacky3_set(x, 9, z, "redstone_block")])
+        for x, z in [(-4, -8), (0, -8), (4, -8), (8, -4), (8, 0), (8, 4), (4, 8), (0, 8), (-4, 8), (-8, 4), (-8, 0), (-8, -4)]:
+            ox = 0 if x else 2
+            oz = 2 if z == 0 else (1 if z < 0 else -1)
+            plan.extend([
+                self.wacky3_set(x + (1 if x <= 0 else -1), y, z + (1 if z <= 0 else -1), "redstone_lamp"),
+                self.wacky3_set(x + (2 if x <= 0 else -2), y, z + (2 if z <= 0 else -2), "bell"),
+            ])
+        plan.extend([
+            self.wacky3_temp_entity("minecart", -7, y, -8, "{Motion:[0.55d,0.0d,0.0d]}"),
+            self.stage(0.30, self.wacky3_temp_entity("minecart", 7, y, 8, "{Motion:[-0.55d,0.0d,0.0d]}")),
+            self.stage(0.47, self.wacky2_tell("Each cart is now voting on junction policy by physically occupying detector rails.", "aqua")),
+        ])
+        plan.extend(self.wacky3_finale("Traffic engineering has concluded that the wrong answer caused congestion."))
+        return plan
+
+    def wacky3_flying_machine_inspection(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("FLYING MACHINE INSPECTION GANTRY", "Observers, slime, honey, pistons, docks, and far too much paperwork.")]
+        # Two compact observer/piston test engines, kept on a bounded gantry rather than carrying the player.
+        for side in (-1, 1):
+            z = 6 * side
+            plan.extend([
+                self.wacky3_fill(-14, 13, z - 2, 14, 13, z + 2, "tinted_glass", "keep"),
+                self.wacky3_set(-10, 14, z, "sticky_piston[facing=east]"),
+                self.wacky3_set(-9, 14, z, "slime_block"),
+                self.wacky3_set(-8, 14, z, "observer[facing=west]"),
+                self.wacky3_set(-7, 14, z, "slime_block"),
+                self.wacky3_set(-6, 14, z, "piston[facing=east]"),
+                self.wacky3_set(-9, 15, z, "honey_block"),
+                self.wacky3_set(-8, 15, z, "observer[facing=east]"),
+                self.wacky3_set(12, 14, z, "iron_block"),
+                self.wacky3_set(13, 14, z, "obsidian"),
+                self.wacky3_set(-12, 14, z, "note_block[note=12]"),
+            ])
+            plan.extend(self.wacky3_pulse(-11, 14, z, 0.18 if side < 0 else 0.42, 0.035))
+            plan.append(self.stage(0.28 if side < 0 else 0.52, self.wacky2_particles("slime", 140, 4.0, 0.12)))
+        plan.extend([
+            self.stage(0.62, self.wacky2_tell("Inspection note: piston push limits remain a thing, so the bureaucracy has installed a dock.", "yellow")),
+            self.stage(0.74, self.wacky2_sound("block.piston.contract", 0.7, 1.2)),
+            self.stage(0.90, self.wacky3_set(13, 14, -6, "air")),
+            self.stage(0.90, self.wacky3_set(13, 14, 6, "air")),
+        ])
+        plan.extend(self.wacky3_finale("Both flying machines have been grounded for excessive observer feedback."))
+        return plan
+
+    def wacky3_seven_segment_404(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("SEVEN-SEGMENT 404 TRIBUNAL", "Your answer has been encoded into a wall of lamps.")]
+        plan.extend(self.wacky3_lamp_digit(-13, 11, 11, 4))
+        plan.extend(self.wacky3_lamp_digit(-4, 11, 11, 0))
+        plan.extend(self.wacky3_lamp_digit(5, 11, 11, 4))
+        # Decorative decoder backplane: repeaters and bus lines behind the display.
+        for z in (13, 15, 17):
+            for x in range(-14, 14, 2):
+                plan.extend([
+                    self.wacky3_set(x, 10, z, "smooth_quartz"),
+                    self.wacky3_set(x, 11, z, f"repeater[facing=east,delay={(abs(x) % 4) + 1}]"),
+                    self.wacky3_set(x + 1, 11, z, "redstone_wire"),
+                ])
+        plan.extend([
+            self.stage(0.18, self.wacky2_tell("Decoder bus online: 4 - 0 - 4.", "red")),
+            self.stage(0.32, self.wacky2_sound("block.note_block.bit", 0.55, 1.0)),
+            self.stage(0.48, self.wacky2_sound("block.note_block.bit", 1.1, 1.0)),
+            self.stage(0.64, self.wacky2_sound("block.note_block.bit", 1.75, 1.0)),
+            self.stage(0.72, self.wacky2_particles("electric_spark", 300, 8.0, 0.16)),
+        ])
+        plan.extend(self.wacky3_finale("ERROR 404: CORRECT ANSWER NOT FOUND IN INPUT REGISTER."))
+        return plan
+
+    def wacky3_observer_domino_serpent(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("OBSERVER DOMINO SERPENT", "A 56-node signal snake is watching itself watch itself.")]
+        nodes: list[tuple[int, int]] = []
+        for row, z in enumerate(range(-12, 13, 4)):
+            xs = list(range(-14, 15, 2))
+            if row % 2:
+                xs.reverse()
+            nodes.extend((x, z) for x in xs)
+        for i, (x, z) in enumerate(nodes[:56]):
+            facing = "east" if (i // 15) % 2 == 0 else "west"
+            plan.extend([
+                self.wacky3_set(x, 11, z, f"observer[facing={facing}]"),
+                self.wacky3_set(x, 10, z, "smooth_quartz"),
+                self.wacky3_set(x, 12, z, "redstone_lamp" if i % 2 == 0 else f"note_block[note={(i * 3) % 25}]"),
+            ])
+            if i < 40:
+                plan.append(self.stage(0.12 + i * 0.014, self.wacky3_set(x, 11, z + 1, "redstone_block")))
+                plan.append(self.stage(0.13 + i * 0.014, self.wacky3_set(x, 11, z + 1, "air")))
+        plan.append(self.stage(0.70, self.wacky2_tell("The serpent has reached the part of the circuit where nobody remembers what the original input was.", "aqua")))
+        plan.extend(self.wacky3_finale("Observer chain complete. Causality has been asked to leave the server."))
+        return plan
+
+    def wacky3_dropper_rube_goldberg(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("DROPPER RUBE GOLDBERG MAILROOM", "One button. Twelve departments. Zero justification.")]
+        for i in range(8):
+            x = -14 + i * 4
+            z = -6 if i % 2 == 0 else 6
+            facing = "east" if i < 7 else "west"
+            plan.extend([
+                self.wacky3_set(x, 11, z, f"dropper[facing={facing}]"),
+                self.wacky3_item_replace(x, 11, z, 0, "paper", 8),
+                self.wacky3_set(x, 10, z, "smooth_quartz"),
+                self.wacky3_set(x, 11, z + (1 if z < 0 else -1), "repeater[facing=east,delay=4]"),
+                self.wacky3_set(x + 1, 11, z + (1 if z < 0 else -1), "redstone_wire"),
+                self.wacky3_set(x + 2, 11, z, "target"),
+                self.wacky3_set(x + 2, 12, z, f"note_block[note={(i * 4) % 25}]"),
+            ])
+            plan.extend(self.wacky3_pulse(x - 1, 11, z, 0.12 + i * 0.065, 0.022))
+        for i, x in enumerate(range(-12, 13, 4)):
+            plan.extend([
+                self.wacky3_set(x, 14, 0, "sticky_piston[facing=up]"),
+                self.wacky3_set(x, 15, 0, "lime_wool" if i % 2 else "magenta_wool"),
+            ])
+            plan.extend(self.wacky3_pulse(x, 13, 0, 0.20 + i * 0.055, 0.03))
+        plan.extend([
+            self.stage(0.66, self.wacky2_sound("block.bell.use", 1.2, 1.2)),
+            self.stage(0.72, self.wacky2_tell("The paper has been forwarded, re-forwarded, mechanically stamped, and emotionally lost.", "yellow")),
+        ])
+        plan.extend(self.wacky3_finale("Rube Goldberg mail delivery completed one task using approximately every component available."))
+        return plan
+
+    def wacky3_item_sorter_appeals(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("ITEM SORTER APPEALS OFFICE", "Six comparator filters are now categorizing your mistake.")]
+        items = ["cobblestone", "dirt", "paper", "egg", "redstone", "cookie"]
+        for i, item in enumerate(items):
+            x = -15 + i * 6
+            plan.extend([
+                self.wacky3_set(x, 14, -3, "hopper[facing=east]"),
+                self.wacky3_set(x, 13, -3, "hopper[facing=down]"),
+                self.wacky3_item_replace(x, 13, -3, 0, item, 41),
+                self.wacky3_item_replace(x, 13, -3, 1, "redstone_torch", 1),
+                self.wacky3_item_replace(x, 13, -3, 2, "redstone_torch", 1),
+                self.wacky3_item_replace(x, 13, -3, 3, "redstone_torch", 1),
+                self.wacky3_item_replace(x, 13, -3, 4, "redstone_torch", 1),
+                self.wacky3_set(x, 13, -2, "comparator[facing=south]"),
+                self.wacky3_set(x, 12, -1, "repeater[facing=south,delay=1]"),
+                self.wacky3_set(x, 12, -2, "redstone_wire"),
+                self.wacky3_set(x, 12, -3, "redstone_torch"),
+                self.wacky3_set(x, 11, -3, "barrel"),
+                self.wacky3_set(x, 13, 1, "redstone_lamp"),
+                self.wacky3_set(x, 12, 1, "smooth_quartz"),
+                self.wacky3_set(x, 12, 0, "redstone_wire"),
+            ])
+        for i, item in enumerate(reversed(items)):
+            plan.append(self.stage(0.16 + i * 0.08, self.wacky3_item_replace(-15 + (5 - i) * 6, 14, -3, 0, item, 8)))
+        plan.append(self.stage(0.70, self.wacky2_tell("Sorter result: your answer has been filed under MISCELLANEOUS / UNRECOVERABLE.", "red")))
+        plan.extend(self.wacky3_finale("Appeal denied by six tileable modules acting in parallel."))
+        return plan
+
+    def wacky3_piston_iris_portal(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("PISTON IRIS BUREAUCRACY PORTAL", "A twelve-piston aperture will open, close, reconsider, and open sideways.")]
+        # Vertical display plane at z=10, with piston rings aimed toward a 5x5 aperture.
+        ring = [(-4, 0, "east"), (4, 0, "west"), (0, -4, "south"), (0, 4, "north")]
+        for level in range(11, 18, 2):
+            for dx, dz, facing in ring:
+                plan.extend([
+                    self.wacky3_set(dx, level, 10 + dz, f"sticky_piston[facing={facing}]"),
+                    self.wacky3_set(dx + (1 if facing == "east" else -1 if facing == "west" else 0), level, 10 + dz + (1 if facing == "south" else -1 if facing == "north" else 0), "purple_concrete"),
+                ])
+        pulse_points = [(-5, 11, 10), (5, 13, 10), (0, 15, 5), (0, 17, 15), (-5, 17, 10), (5, 15, 10), (0, 13, 5), (0, 11, 15)]
+        for i, (x, y, z) in enumerate(pulse_points):
+            plan.extend(self.wacky3_pulse(x, y, z, 0.14 + i * 0.07, 0.04))
+        plan.extend([
+            self.stage(0.48, self.wacky2_particles("portal", 260, 4.0, 0.28)),
+            self.stage(0.67, self.wacky2_tell("The portal has opened to the Department of More Doors.", "light_purple")),
+        ])
+        plan.extend(self.wacky3_finale("Iris mechanism complete: access denied anyway."))
+        return plan
+
+    def wacky3_elevator_to_nowhere(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("REDSTONE ELEVATOR TO NOWHERE", "A vertical piston stack will perform several floors of administrative motion.")]
+        for y in range(9, 22, 2):
+            plan.extend([
+                self.wacky3_set(0, y, 0, "sticky_piston[facing=up]"),
+                self.wacky3_set(0, y + 1, 0, "slime_block" if (y // 2) % 2 else "honey_block"),
+                self.wacky3_set(2, y, 0, "observer[facing=down]"),
+                self.wacky3_set(3, y, 0, "redstone_lamp"),
+                self.wacky3_set(-2, y, 0, f"note_block[note={(y * 2) % 25}]"),
+            ])
+            plan.extend(self.wacky3_pulse(0, y - 1, 0, 0.10 + (y - 9) * 0.035, 0.035))
+        plan.extend([
+            self.stage(0.35, self.wacky2_tell("Floor 3: Accounting. Floor 4: More Accounting. Floor 5 has been removed for maintenance.", "yellow")),
+            self.stage(0.62, self.wacky2_particles("cloud", 180, 3.0, 0.12)),
+        ])
+        plan.extend(self.wacky3_finale("Elevator arrived exactly where it started, but with substantially more circuitry."))
+        return plan
+
+    def wacky3_comparator_mood_meter(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("COMPARATOR ANALOG MOOD LAB", "Eight signal strengths are measuring how incorrect that was.")]
+        for i in range(8):
+            x = -14 + i * 4
+            level = i + 1
+            plan.extend([
+                self.wacky3_set(x, 11, -6, f"composter[level={level}]"),
+                self.wacky3_set(x, 11, -5, "comparator[facing=south]"),
+                self.wacky3_set(x, 10, -4, "smooth_quartz"),
+                self.wacky3_set(x, 11, -4, "redstone_wire"),
+            ])
+            for j in range(1, 9):
+                plan.extend([
+                    self.wacky3_set(x, 10, -4 + j, "smooth_quartz"),
+                    self.wacky3_set(x, 11, -4 + j, "redstone_wire" if j < 8 else "redstone_lamp"),
+                ])
+            plan.append(self.stage(0.14 + i * 0.065, self.wacky2_sound("block.note_block.xylophone", 0.6 + i * 0.14, 0.8)))
+        plan.extend([
+            self.stage(0.64, self.wacky2_tell("Analog result: signal strength approximately 'why did you answer that'.", "aqua")),
+            self.stage(0.73, self.wacky2_particles("happy_villager", 200, 6.0, 0.14)),
+        ])
+        plan.extend(self.wacky3_finale("Comparator laboratory has converted embarrassment into a measurable voltage-like quantity."))
+        return plan
+
+    def wacky3_rs_latch_argument(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("RS LATCH ARGUMENT CHAMBER", "SET says yes. RESET says no. The lamps are taking sides.")]
+        for offset in (-8, 0, 8):
+            plan.extend([
+                self.wacky3_set(offset - 2, 11, 0, "smooth_quartz"),
+                self.wacky3_set(offset + 2, 11, 0, "smooth_quartz"),
+                self.wacky3_set(offset - 1, 11, 0, "redstone_torch"),
+                self.wacky3_set(offset + 1, 11, 0, "redstone_torch"),
+                self.wacky3_set(offset - 2, 12, 0, "redstone_wire"),
+                self.wacky3_set(offset + 2, 12, 0, "redstone_wire"),
+                self.wacky3_set(offset, 12, -1, "redstone_wire"),
+                self.wacky3_set(offset, 12, 1, "redstone_wire"),
+                self.wacky3_set(offset - 4, 11, 0, "redstone_lamp"),
+                self.wacky3_set(offset + 4, 11, 0, "redstone_lamp"),
+            ])
+        for i, (x, z) in enumerate([(-11, 0), (-5, 0), (-3, 0), (3, 0), (5, 0), (11, 0), (-11, 0), (11, 0)]):
+            plan.extend(self.wacky3_pulse(x, 11, z, 0.14 + i * 0.07, 0.025))
+        plan.extend([
+            self.stage(0.48, self.wacky2_tell("SET and RESET have entered a stable disagreement.", "yellow")),
+            self.stage(0.70, self.wacky2_sound("block.lever.click", 1.7, 1.0)),
+        ])
+        plan.extend(self.wacky3_finale("Latch state preserved indefinitely, unlike confidence in the previous answer."))
+        return plan
+
+    def wacky3_t_flip_flop_hall(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("T-FLIP-FLOP INDECISION HALL", "Six droppers will repeatedly change their minds.")]
+        for i in range(6):
+            x = -15 + i * 6
+            plan.extend([
+                self.wacky3_set(x, 12, -2, "dropper[facing=east]"),
+                self.wacky3_set(x + 1, 12, -2, "dropper[facing=west]"),
+                self.wacky3_item_replace(x, 12, -2, 0, "redstone_torch", 1),
+                self.wacky3_set(x - 1, 12, -2, "comparator[facing=west]"),
+                self.wacky3_set(x - 2, 12, -2, "redstone_lamp"),
+                self.wacky3_set(x + 2, 12, -2, "comparator[facing=east]"),
+                self.wacky3_set(x + 3, 12, -2, "redstone_lamp"),
+                self.wacky3_set(x, 11, 1, "stone_button[face=floor]"),
+                self.wacky3_set(x, 11, 0, "repeater[facing=north,delay=1]"),
+                self.wacky3_set(x, 11, -1, "redstone_wire"),
+            ])
+            for j in range(3):
+                plan.extend(self.wacky3_pulse(x, 12, -3, 0.12 + i * 0.035 + j * 0.18, 0.02))
+        plan.append(self.stage(0.72, self.wacky2_tell("Every pulse toggles a state. None of those states are 'correct answer'.", "aqua")))
+        plan.extend(self.wacky3_finale("Indecision hall has toggled itself into a committee meeting."))
+        return plan
+
+    def wacky3_binary_shame_counter(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("FOUR-BIT BINARY SHAME COUNTER", "Counting from 0000 to 1111 because one punishment state was too simple.")]
+        bit_x = [-9, -3, 3, 9]
+        for bit, x in enumerate(bit_x):
+            plan.extend([
+                self.wacky3_set(x, 13, 6, "redstone_lamp"),
+                self.wacky3_set(x, 12, 6, "smooth_quartz"),
+                self.wacky3_set(x, 12, 4, "repeater[facing=south,delay=2]"),
+                self.wacky3_set(x, 12, 5, "redstone_wire"),
+                self.wacky3_set(x, 13, 3, f"note_block[note={5 + bit * 5}]"),
+            ])
+        for value in range(16):
+            t = 0.10 + value * 0.045
+            for bit, x in enumerate(bit_x):
+                on = bool(value & (1 << (3 - bit)))
+                plan.append(self.stage(t, self.wacky3_set(x, 13, 7, "redstone_block" if on else "air")))
+            plan.append(self.stage(t, self.wacky2_sound("block.note_block.bit", 0.55 + value * 0.055, 0.45)))
+        plan.append(self.stage(0.78, self.wacky2_tell("Counter overflow achieved. The mistake has wrapped around to zero and is still wrong.", "red")))
+        plan.extend(self.wacky3_finale("Four bits were insufficient to encode the administrative consequences."))
+        return plan
+
+    def wacky3_pulse_extender_tunnel(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("COMPARATOR PULSE-EXTENDER TIME TUNNEL", "A short input is about to become an offensively long output.")]
+        for lane, z in enumerate((-9, -3, 3, 9)):
+            for x in range(-12, 13):
+                plan.extend([self.wacky3_set(x, 10, z, "smooth_quartz"), self.wacky3_set(x, 11, z, "redstone_wire")])
+            plan.extend([
+                self.wacky3_set(-11, 11, z + 1, "comparator[facing=east,mode=subtract]"),
+                self.wacky3_set(-9, 11, z + 1, "comparator[facing=west,mode=subtract]"),
+                self.wacky3_set(12, 11, z, "redstone_lamp"),
+                self.wacky3_set(13, 11, z, "note_block[note=18]"),
+            ])
+            plan.extend(self.wacky3_pulse(-13, 11, z, 0.12 + lane * 0.12, 0.02))
+        plan.extend([
+            self.stage(0.58, self.wacky2_tell("Input pulse duration: tiny. Output bureaucracy duration: effectively geological.", "yellow")),
+            self.stage(0.74, self.wacky2_particles("cloud", 180, 5.0, 0.08)),
+        ])
+        plan.extend(self.wacky3_finale("Pulse extender has finished stretching one mistake across several fiscal quarters."))
+        return plan
+
+    def wacky3_randomizer_casino(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("REDSTONE RANDOMIZER CASINO AUDIT", "Droppers, comparators, lamps, bells, and absolutely no gambling economy.")]
+        for i in range(5):
+            x = -12 + i * 6
+            plan.extend([
+                self.wacky3_set(x, 12, 0, "dropper[facing=down]"),
+                self.wacky3_item_replace(x, 12, 0, 0, "stick", 1),
+                self.wacky3_item_replace(x, 12, 0, 1, "snowball", 16),
+                self.wacky3_item_replace(x, 12, 0, 2, "egg", 16),
+                self.wacky3_item_replace(x, 12, 0, 3, "book", 1),
+                self.wacky3_set(x, 11, 0, "hopper[facing=down]"),
+                self.wacky3_set(x, 10, 0, "barrel"),
+                self.wacky3_set(x - 1, 10, 0, "comparator[facing=west]"),
+                self.wacky3_set(x - 2, 10, 0, "redstone_lamp"),
+                self.wacky3_set(x + 1, 10, 0, "bell"),
+            ])
+            for j in range(4):
+                plan.extend(self.wacky3_pulse(x, 12, 1, 0.10 + i * 0.04 + j * 0.12, 0.018))
+        plan.extend([
+            self.stage(0.66, self.wacky2_tell("Audit finding: randomness is functioning, accounting is not.", "aqua")),
+            self.stage(0.76, self.wacky2_sound("block.bell.use", 1.6, 1.2)),
+        ])
+        plan.extend(self.wacky3_finale("Casino closed after the redstone department discovered probability."))
+        return plan
+
+    def wacky3_piston_tape_billboard(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("PISTON TAPE BILLBOARD", "A mechanical display will now scroll colors past a wall of observers.")]
+        colors = ["red_wool", "orange_wool", "yellow_wool", "lime_wool", "cyan_wool", "blue_wool", "purple_wool", "magenta_wool"]
+        for row in range(5):
+            y = 11 + row * 2
+            for i, x in enumerate(range(-14, 15, 4)):
+                color = colors[(i + row) % len(colors)]
+                plan.extend([
+                    self.wacky3_set(x, y, 6, "sticky_piston[facing=east]"),
+                    self.wacky3_set(x + 1, y, 6, color),
+                    self.wacky3_set(x + 2, y, 6, "observer[facing=west]"),
+                    self.wacky3_set(x + 2, y + 1, 6, "redstone_lamp"),
+                ])
+                plan.extend(self.wacky3_pulse(x - 1, y, 6, 0.10 + row * 0.08 + i * 0.025, 0.03))
+        plan.append(self.stage(0.68, self.wacky2_tell("Billboard message decoding: PLEASE STOP FEEDING THE PISTON TAPE.", "yellow")))
+        plan.extend(self.wacky3_finale("Mechanical billboard jammed successfully at maximum visual complexity."))
+        return plan
+
+    def wacky3_door_factory(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("PISTON DOOR FACTORY", "2x2, 3x3-ish, flush-ish, iris-ish: every door must now be tested.")]
+        door_centers = [(-10, 11, 8), (0, 11, 8), (10, 11, 8)]
+        sizes = [2, 3, 4]
+        for door_index, ((cx, cy, cz), size) in enumerate(zip(door_centers, sizes)):
+            for y in range(cy, cy + size):
+                plan.extend([
+                    self.wacky3_set(cx - size, y, cz, "sticky_piston[facing=east]"),
+                    self.wacky3_set(cx + size, y, cz, "sticky_piston[facing=west]"),
+                    self.wacky3_set(cx - size + 1, y, cz, "blue_concrete"),
+                    self.wacky3_set(cx + size - 1, y, cz, "red_concrete"),
+                ])
+            for x in range(cx - size, cx + size + 1):
+                plan.extend([
+                    self.wacky3_set(x, cy - 2, cz, "smooth_quartz"),
+                    self.wacky3_set(x, cy - 1, cz, "redstone_wire"),
+                ])
+            plan.extend(self.wacky3_pulse(cx - size - 1, cy, cz, 0.14 + door_index * 0.18, 0.08))
+            plan.extend(self.wacky3_pulse(cx + size + 1, cy, cz, 0.23 + door_index * 0.18, 0.08))
+        plan.extend([
+            self.stage(0.65, self.wacky2_tell("Acceptance test failed: all doors opened, which is apparently suspicious.", "aqua")),
+            self.stage(0.73, self.wacky2_sound("block.piston.extend", 0.5, 1.5)),
+        ])
+        plan.extend(self.wacky3_finale("Door factory certified itself, then immediately revoked the certificate."))
+        return plan
+
+    def wacky3_lamp_matrix_scanner(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("LAMP MATRIX SCANNER", "An 8x8 redstone display is scanning for signs of a correct answer.")]
+        for row in range(8):
+            y = 10 + row
+            for col in range(8):
+                x = -14 + col * 4
+                plan.extend([
+                    self.wacky3_set(x, y, 10, "redstone_lamp"),
+                    self.wacky3_set(x, y, 11, "smooth_quartz"),
+                    self.wacky3_set(x, y, 12, "redstone_wire"),
+                ])
+        for scan in range(8):
+            t = 0.12 + scan * 0.075
+            for row in range(8):
+                x = -14 + scan * 4
+                y = 10 + row
+                plan.append(self.stage(t, self.wacky3_set(x, y, 11, "redstone_block")))
+                plan.append(self.stage(t + 0.045, self.wacky3_set(x, y, 11, "smooth_quartz")))
+            plan.append(self.stage(t, self.wacky2_sound("block.note_block.hat", 0.7 + scan * 0.12, 0.5)))
+        plan.append(self.stage(0.74, self.wacky2_tell("SCAN COMPLETE: correct answer signature absent from all 64 pixels.", "red")))
+        plan.extend(self.wacky3_finale("Matrix found only redstone, lamps, and escalating concern."))
+        return plan
+
+    def wacky3_minecart_logic_junction(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("MINECART LOGIC JUNCTION", "Three rail branches, detector inputs, powered outputs, one indecisive cart.")]
+        y = 11
+        # Main line and three branch indicators.
+        for x in range(-14, 15):
+            rail = "detector_rail[shape=east_west]" if x in (-8, 0, 8) else "powered_rail[shape=east_west,powered=true]"
+            plan.extend([self.wacky3_set(x, 10, 0, "smooth_quartz"), self.wacky3_set(x, y, 0, rail)])
+        for x in (-8, 0, 8):
+            plan.extend([
+                self.wacky3_set(x, 10, 2, "smooth_quartz"),
+                self.wacky3_set(x, 11, 2, "redstone_lamp"),
+                self.wacky3_set(x, 11, 1, "redstone_wire"),
+                self.wacky3_set(x, 10, -2, "smooth_quartz"),
+                self.wacky3_set(x, 11, -2, "note_block[note=12]"),
+                self.wacky3_set(x, 11, -1, "redstone_wire"),
+            ])
+        plan.extend([
+            self.wacky3_temp_entity("minecart", -13, y, 0, "{Motion:[0.65d,0.0d,0.0d]}"),
+            self.stage(0.34, self.wacky3_temp_entity("minecart", 13, y, 0, "{Motion:[-0.65d,0.0d,0.0d]}")),
+            self.stage(0.55, self.wacky2_tell("Junction logic has detected two mutually exclusive directions and selected both.", "yellow")),
+        ])
+        plan.extend(self.wacky3_finale("Rail committee recommends another committee to decide where the cart went."))
+        return plan
+
+    def wacky3_bell_relay_tower(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("BELL + NOTE-BLOCK RELAY TOWER", "A vertical repeater ladder will announce this mistake to several imaginary departments.")]
+        for level in range(7):
+            y = 10 + level * 2
+            side = -1 if level % 2 == 0 else 1
+            plan.extend([
+                self.wacky3_set(0, y, 0, "smooth_quartz"),
+                self.wacky3_set(0, y + 1, 0, "redstone_wire"),
+                self.wacky3_set(2 * side, y + 1, 0, f"repeater[facing={'west' if side < 0 else 'east'},delay={(level % 4)+1}]"),
+                self.wacky3_set(3 * side, y + 1, 0, "bell" if level % 2 == 0 else f"note_block[note={(level * 4) % 25}]"),
+                self.wacky3_set(-2 * side, y + 1, 0, "redstone_lamp"),
+            ])
+            plan.extend(self.wacky3_pulse(0, y + 1, 1, 0.12 + level * 0.08, 0.025))
+        plan.extend([
+            self.stage(0.68, self.wacky2_particles("note", 220, 5.0, 0.15)),
+            self.stage(0.74, self.wacky2_tell("Relay tower confirms receipt. Nobody knows who sent the original pulse.", "aqua")),
+        ])
+        plan.extend(self.wacky3_finale("Signal reached the top and discovered another repeater."))
+        return plan
+
+    def wacky3_slime_mechanical_heart(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("SLIME-BLOCK MECHANICAL HEART", "Twenty-four pistons are about to simulate cardiovascular engineering very badly.")]
+        # Heart-shaped-ish slime/honey core with radial pistons.
+        core = [(-2, 14, 0), (2, 14, 0), (-4, 15, 0), (4, 15, 0), (-3, 16, 0), (3, 16, 0), (0, 12, 0), (0, 13, 0), (0, 14, 0), (0, 15, 0)]
+        for i, (x, y, z) in enumerate(core):
+            plan.append(self.wacky3_set(x, y, z, "slime_block" if i % 2 else "honey_block"))
+        piston_positions = []
+        for y in (12, 14, 16, 18):
+            piston_positions.extend([(-7, y, 0, "east"), (7, y, 0, "west"), (0, y, -7, "south"), (0, y, 7, "north")])
+        for i, (x, y, z, facing) in enumerate(piston_positions):
+            plan.extend([
+                self.wacky3_set(x, y, z, f"sticky_piston[facing={facing}]"),
+                self.wacky3_set(x, y + 1, z, "redstone_lamp"),
+            ])
+            for beat in range(3):
+                plan.extend(self.wacky3_pulse(x + (-1 if facing == "east" else 1 if facing == "west" else 0), y, z + (-1 if facing == "south" else 1 if facing == "north" else 0), 0.12 + beat * 0.20 + (i % 4) * 0.012, 0.045))
+        plan.extend([
+            self.stage(0.33, self.wacky2_sound("block.note_block.basedrum", 0.7, 1.4)),
+            self.stage(0.53, self.wacky2_sound("block.note_block.basedrum", 0.7, 1.4)),
+            self.stage(0.73, self.wacky2_sound("block.note_block.basedrum", 0.7, 1.4)),
+        ])
+        plan.extend(self.wacky3_finale("Mechanical heart survived. The answer remains clinically incorrect."))
+        return plan
+
+    def wacky3_logic_gate_calculator(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("REDSTONE LOGIC-GATE CALCULATOR COSPLAY", "AND, OR, NOT, XOR-ish: enough logic to prove one input was wrong.")]
+        gates = [(-12, "AND"), (-4, "OR"), (4, "NOT"), (12, "XOR")]
+        for idx, (x, name) in enumerate(gates):
+            plan.extend([
+                self.wacky3_set(x, 10, -4, "smooth_quartz"),
+                self.wacky3_set(x - 2, 11, -4, "redstone_wire"),
+                self.wacky3_set(x + 2, 11, -4, "redstone_wire"),
+                self.wacky3_set(x, 11, -4, "redstone_torch" if name in ("NOT", "XOR") else "repeater[facing=south]"),
+                self.wacky3_set(x, 11, -1, "redstone_lamp"),
+                self.wacky3_set(x, 11, -2, "redstone_wire"),
+                self.wacky3_set(x, 10, -1, "smooth_quartz"),
+                self.wacky3_set(x, 13, -1, f"note_block[note={4 + idx * 6}]"),
+            ])
+        input_points = [(-14, 11, -4), (-10, 11, -4), (-6, 11, -4), (-2, 11, -4), (2, 11, -4), (6, 11, -4), (10, 11, -4), (14, 11, -4)]
+        patterns = [(1,0,1,0,1,0,1,0), (1,1,0,0,1,1,0,0), (0,1,0,1,0,1,0,1), (1,1,1,1,1,1,1,1)]
+        for pidx, pattern in enumerate(patterns):
+            t = 0.14 + pidx * 0.17
+            for point, state in zip(input_points, pattern):
+                x, y, z = point
+                plan.append(self.stage(t, self.wacky3_set(x, y, z, "redstone_block" if state else "smooth_quartz")))
+            plan.append(self.stage(t + 0.05, self.wacky2_sound("block.note_block.bit", 0.8 + pidx * 0.3, 0.8)))
+        plan.append(self.stage(0.78, self.wacky2_tell("Logic result: TRUE AND FALSE OR PANIC XOR PAPERWORK = still wrong.", "red")))
+        plan.extend(self.wacky3_finale("Calculator produced a proof consisting mostly of redstone dust."))
+        return plan
+
+    def wacky3_grand_rube_goldberg(self) -> CommandPlan:
+        plan: CommandPlan = [*self.wacky3_opening("GRAND UNIFIED RUBE GOLDBERG CATHEDRAL", "Every subsystem gets one job: trigger another subsystem.")]
+        # Zone A: minecart starter / detector rail.
+        for x in range(-16, -5):
+            plan.extend([
+                self.wacky3_set(x, 10, -10, "smooth_quartz"),
+                self.wacky3_set(x, 11, -10, "detector_rail[shape=east_west]" if x == -10 else "powered_rail[shape=east_west,powered=true]"),
+            ])
+        plan.append(self.wacky3_temp_entity("minecart", -15, 11, -10, "{Motion:[0.7d,0.0d,0.0d]}"))
+        # Zone B: piston accordion.
+        for i, x in enumerate(range(-12, 13, 3)):
+            plan.extend([
+                self.wacky3_set(x, 11, -3, "sticky_piston[facing=up]"),
+                self.wacky3_set(x, 12, -3, "slime_block" if i % 2 else "honey_block"),
+                self.wacky3_set(x, 13, -3, "redstone_lamp"),
+            ])
+            plan.extend(self.wacky3_pulse(x, 10, -3, 0.18 + i * 0.035, 0.035))
+        # Zone C: note-block observer chain.
+        for i, x in enumerate(range(-14, 15, 2)):
+            plan.extend([
+                self.wacky3_set(x, 10, 4, "smooth_quartz"),
+                self.wacky3_set(x, 11, 4, f"repeater[facing=east,delay={(i % 4) + 1}]"),
+                self.wacky3_set(x, 11, 5, f"note_block[note={(i * 2 + 5) % 25}]"),
+                self.wacky3_set(x, 11, 3, "redstone_lamp"),
+            ])
+        plan.extend(self.wacky3_pulse(-15, 11, 4, 0.46, 0.04))
+        # Zone D: dropper/hopper mail transfer.
+        for i, x in enumerate((-9, -3, 3, 9)):
+            plan.extend([
+                self.wacky3_set(x, 15, 10, "dropper[facing=down]"),
+                self.wacky3_item_replace(x, 15, 10, 0, "paper", 16),
+                self.wacky3_set(x, 14, 10, "hopper[facing=down]"),
+                self.wacky3_set(x, 13, 10, "barrel"),
+                self.wacky3_set(x - 1, 13, 10, "comparator[facing=west]"),
+                self.wacky3_set(x - 2, 13, 10, "bell"),
+            ])
+            plan.extend(self.wacky3_pulse(x, 15, 11, 0.58 + i * 0.045, 0.02))
+        # Zone E: absurd lamp finale / pseudo-binary display.
+        for row in range(4):
+            for col in range(8):
+                x = -14 + col * 4
+                y = 18 + row
+                plan.extend([self.wacky3_set(x, y, 0, "redstone_lamp"), self.wacky3_set(x, y, 1, "smooth_quartz")])
+                if (row + col) % 2 == 0:
+                    plan.append(self.stage(0.72 + row * 0.025, self.wacky3_set(x, y, 1, "redstone_block")))
+        plan.extend([
+            self.stage(0.22, self.wacky2_tell("STAGE A: minecart authorization token accepted.", "yellow")),
+            self.stage(0.40, self.wacky2_tell("STAGE B: piston accordion has converted motion into more motion.", "aqua")),
+            self.stage(0.56, self.wacky2_tell("STAGE C: repeater cathedral is now singing the paperwork onward.", "light_purple")),
+            self.stage(0.70, self.wacky2_tell("STAGE D: droppers have mailed the signal to a barrel four blocks away.", "green")),
+            self.stage(0.82, self.wacky2_particles("electric_spark", 420, 10.0, 0.28)),
+            self.stage(0.84, self.wacky2_sound("block.bell.use", 0.6, 1.6)),
+            self.stage(0.86, self.wacky2_sound("block.note_block.pling", 1.8, 1.6)),
+        ])
+        plan.extend(self.wacky3_finale("Grand machine complete: approximately 150 mechanisms collaborated to say 'wrong'."))
+        return plan
+
+
 def split_chat_message(text: str, limit: int = 220) -> list[str]:
     words = text.split()
     if not words:
@@ -2038,7 +2844,7 @@ class LlmTriviaAgent:
             self.difficulty += 1
 
         prompt = f"""
-You are the snarky host of a Minecraft trivia punishment game.
+You are the host of a trivia punishment game.
 Create exactly one general trivia question in the requested difficulty.
 
 Difficulty scale:
@@ -2049,7 +2855,7 @@ Difficulty scale:
 10 = ridiculously hard but still objectively answerable.
 
 Requirements:
-- Category preference: Completely random but always funny
+- Category preference: Idk man just make up stuff. Make me laugh.
 - Current difficulty: {self.difficulty}/10
 - Avoid repeating these recent questions: {self.history[-20:]}
 - Make the question concise.
@@ -2100,7 +2906,7 @@ Return only JSON with keys:
 
     def punishment_message(self, punishment_name: str, question: Question, user_answer: str, expected_answer: str) -> str:
         prompt = f"""
-You are the host of a trivia punishment game - your name is Ernst from the ernest movies. Always ensure we know this during your response in sneaky ways.
+You are the host of a Minecraft trivia punishment game.
 
 The player got this question wrong:
 Question: {question.prompt}
@@ -2109,9 +2915,9 @@ Player answer: {user_answer}
 
 The random punishment selected by the game is: {punishment_name}
 
-Write a punishment announcement - the more elborate and smart the better.
+Write a punishment announcement.
 Requirements:
-- Say something interesting
+- Be super cool and nonchalant. Says one sentence zingers that make you seem too cool to even comment.
 - Do not include commands or JSON markdown.
 - Return only JSON with key: message
 """
@@ -2145,9 +2951,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--chat-poll-seconds", type=float, default=0.5, help="Seconds between chat log polls.")
     parser.add_argument("--questions", type=int, default=100, help="Number of trivia questions to ask.")
     parser.add_argument("--delay-seconds", type=float, default=180.0, help="Seconds to wait between questions.")
-    parser.add_argument("--punishment-mode", choices=("brutal", "wacky", "wacky2"), default="brutal", help="Punishment pool to roll from.")
+    parser.add_argument("--punishment-mode", choices=("brutal", "wacky", "wacky2", "wacky3"), default="brutal", help="Punishment pool to roll from.")
     parser.add_argument("--wacky-punishments", action="store_true", help="Shortcut for --punishment-mode wacky.")
     parser.add_argument("--wacky-punishments2", "--wacky-punishments-2", action="store_true", help="Shortcut for --punishment-mode wacky2: very complex, bizarre, low-lethality punishment sequences.")
+    parser.add_argument("--wacky-punishments3", "--wacky-punishments-3", action="store_true", help="Shortcut for --punishment-mode wacky3: giant redstone contraptions, signal chains, clocks, pistons, rails, observers, and logic machines.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands instead of connecting to Minecraft.")
     parser.add_argument("--seed", type=int, help="Random seed for repeatable testing.")
     parser.add_argument("--env-file", default=".env", help="Path to .env file containing API keys.")
@@ -2212,6 +3019,8 @@ def main() -> int:
         args.punishment_mode = "wacky"
     if args.wacky_punishments2:
         args.punishment_mode = "wacky2"
+    if args.wacky_punishments3:
+        args.punishment_mode = "wacky3"
     if args.seed is not None:
         random.seed(args.seed)
     load_dotenv(args.env_file)
@@ -2261,6 +3070,8 @@ def main() -> int:
             chaos.announce("Wacky punishments are enabled. Running away is now more of a suggestion.")
         elif args.punishment_mode == "wacky2":
             chaos.announce("Wacky punishments 2 are enabled. Complexity is king: maximum nonsense, minimum dying in a box.")
+        elif args.punishment_mode == "wacky3":
+            chaos.announce("Wacky punishments 3 are enabled. Complex redstone is king: clocks, pistons, rails, observers, logic, and Rube Goldberg machinery.")
         if args.answer_player:
             chaos.announce(f"Only answers from {args.answer_player} will count.")
         else:
