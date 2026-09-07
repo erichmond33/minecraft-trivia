@@ -1,6 +1,6 @@
 # Minecraft Trivia Chaos
 
-`trivia_minecraft_chaos.py` runs a Minecraft chat trivia game through RCON and the server log. An LLM creates each question in real time, judges whether the answer is correct, and writes the snarky chat response. Wrong answers roll one of 60 random punishments, now tuned to be roughly 10x nastier, then the LLM writes the punishment announcement too.
+`trivia_minecraft_chaos.py` runs a Minecraft chat trivia game through RCON and the server log. An LLM creates each question in real time, judges whether the answer is correct, and writes the snarky chat response. Wrong answers roll one of 60 brutal punishments by default, or a separate pool of wacky multi-step punishments when enabled. The LLM writes the punishment announcement too.
 
 ## Gemini Setup
 
@@ -66,6 +66,12 @@ Run against a local server with default Ollama Cloud and default RCON password `
 python3 trivia_minecraft_chaos.py --target @a
 ```
 
+Run with the wacky punishment pool:
+
+```bash
+python3 trivia_minecraft_chaos.py --wacky-punishments --target @a
+```
+
 Check Ollama Cloud auth before starting the game:
 
 ```bash
@@ -87,6 +93,8 @@ Useful options:
 - `--chat-log logs/latest.log` chooses the server log to read chat answers from.
 - `--questions 50` changes the session length. The default is `100`.
 - `--delay-seconds 30` waits 30 seconds between questions. The default is `180`, or 3 minutes.
+- `--punishment-mode wacky` uses complex wacky punishments instead of the brutal spawn/effect pool.
+- `--wacky-punishments` is a shortcut for `--punishment-mode wacky`.
 - `--category "Minecraft and science"` nudges the LLM toward a category.
 - `--llm-provider ollama` uses Ollama instead of Gemini. The default is `ollama`.
 - `--gemini-model gemini-3.7-flash` changes the model.
@@ -168,6 +176,10 @@ The script rolls randomly from these:
 60. Rotten flesh consolation prize
 
 I intentionally made the chunk punishment limited. Deleting an actual chunk is better done with a server plugin or world editor and is too easy to make permanently destructive by accident.
+
+## Wacky Punishments
+
+Use `--wacky-punishments` to swap the normal pool for 20 more elaborate punishments. These are built to be harder to ignore than raw mob spam: glass rooms, cobweb mazes, water tanks, moving-vehicle clutter, lava moats, status-effect combos, spectator mobs, and mixed staged disasters.
 
 ## Other Ideas That Would Fit Well
 

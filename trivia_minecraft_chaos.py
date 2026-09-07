@@ -478,10 +478,17 @@ def parse_chat_log_line(line: str) -> ChatMessage | None:
 
 
 class MinecraftChaos:
-    def __init__(self, send_command: Callable[[str], str], target: str, dry_run: bool) -> None:
+    def __init__(
+        self,
+        send_command: Callable[[str], str],
+        target: str,
+        dry_run: bool,
+        punishment_mode: str = "brutal",
+    ) -> None:
         self.send_command = send_command
         self.target = target
         self.dry_run = dry_run
+        self.punishment_mode = punishment_mode
         self.wrong_answers = 0
         self.mob_wave_size = 2 * PUNISHMENT_MULTIPLIER
         self.punishments: list[tuple[str, Callable[[], list[str]]]] = [
@@ -545,6 +552,32 @@ class MinecraftChaos:
             ("Thunderstorm button", self.thunderstorm),
             ("Night shift", self.night_shift),
             ("Rotten flesh consolation prize", self.rotten_flesh),
+        ]
+        if punishment_mode == "wacky":
+            self.punishments = self.build_wacky_punishments()
+
+    def build_wacky_punishments(self) -> list[tuple[str, Callable[[], list[str]]]]:
+        return [
+            ("Cobweb escape room with spectators", self.wacky_cobweb_escape_room),
+            ("Aquarium of poor decisions", self.wacky_aquarium),
+            ("Goat court summons", self.wacky_goat_court),
+            ("Anvil elevator with no permit", self.wacky_anvil_elevator),
+            ("Boat DMV appointment", self.wacky_boat_dmv),
+            ("Minecart bureaucracy spiral", self.wacky_minecart_spiral),
+            ("Creeper confessional booth", self.wacky_creeper_confessional),
+            ("Powder snow smoothie chamber", self.wacky_powder_snow_smoothie),
+            ("Enderman staring contest", self.wacky_enderman_staring_contest),
+            ("Witch soup kitchen", self.wacky_witch_soup_kitchen),
+            ("Pufferfish board meeting", self.wacky_pufferfish_meeting),
+            ("Chicken ceiling collapse", self.wacky_chicken_ceiling),
+            ("Lava moat speed dating", self.wacky_lava_moat),
+            ("Phantom air traffic control", self.wacky_phantom_airport),
+            ("Bee lawsuit", self.wacky_bee_lawsuit),
+            ("Slime trampoline subpoena", self.wacky_slime_trampoline),
+            ("Magma cube paperwork pit", self.wacky_magma_pit),
+            ("Cactus gallery opening", self.wacky_cactus_gallery),
+            ("The pumpkin HR incident", self.wacky_pumpkin_hr),
+            ("Tiny apocalypse sampler platter", self.wacky_sampler_platter),
         ]
 
     def announce(self, text: str) -> None:
@@ -846,6 +879,178 @@ class MinecraftChaos:
             f"effect give {self.target} minecraft:hunger 160 4 true",
         ]
 
+    def wacky_cobweb_escape_room(self) -> list[str]:
+        return [
+            self.as_target("tp @s ~ ~1 ~"),
+            self.at_target("fill ~-5 ~-1 ~-5 ~5 ~6 ~5 minecraft:glass replace minecraft:air"),
+            self.at_target("fill ~-4 ~ ~-4 ~4 ~4 ~4 minecraft:cobweb replace minecraft:air"),
+            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
+            f"effect give {self.target} minecraft:mining_fatigue 90 4 true",
+            *self.summon_many("armor_stand", 12, 5, "~", "{CustomName:'\"Disappointed Witness\"',NoGravity:1b}"),
+        ]
+
+    def wacky_aquarium(self) -> list[str]:
+        return [
+            self.at_target("fill ~-5 ~-1 ~-5 ~5 ~7 ~5 minecraft:glass replace minecraft:air"),
+            self.at_target("fill ~-4 ~ ~-4 ~4 ~6 ~4 minecraft:water replace minecraft:air"),
+            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:water"),
+            f"effect give {self.target} minecraft:water_breathing 45 0 true",
+            *self.summon_many("pufferfish", 18, 4, "~1"),
+            *self.summon_many("guardian", 3, 4, "~1"),
+        ]
+
+    def wacky_goat_court(self) -> list[str]:
+        return [
+            self.at_target("fill ~-6 ~-1 ~-6 ~6 ~-1 ~6 minecraft:polished_diorite"),
+            self.at_target("fill ~-6 ~ ~-6 ~6 ~4 ~6 minecraft:iron_bars replace minecraft:air"),
+            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
+            f"effect give {self.target} minecraft:slowness 80 3 true",
+            *self.summon_many("goat", 18, 5),
+            *self.summon_many("villager", 6, 4, "~", "{VillagerData:{profession:\"minecraft:cleric\"}}"),
+        ]
+
+    def wacky_anvil_elevator(self) -> list[str]:
+        return [
+            self.as_target("tp @s ~ ~35 ~"),
+            f"effect give {self.target} minecraft:slow_falling 3 0 true",
+            self.at_target("fill ~-3 ~-2 ~-3 ~3 ~-2 ~3 minecraft:slime_block replace minecraft:air"),
+            *[self.at_target(f"setblock ~{random.randint(-4, 4)} ~16 ~{random.randint(-4, 4)} minecraft:anvil") for _ in range(80)],
+        ]
+
+    def wacky_boat_dmv(self) -> list[str]:
+        return [
+            self.at_target("fill ~-7 ~-1 ~-7 ~7 ~-1 ~7 minecraft:blue_ice"),
+            f"effect give {self.target} minecraft:slowness 45 2 true",
+            *self.summon_many("boat", 20, 7),
+            *self.summon_many("zombie", 10, 6, "~", "{IsBaby:1b}"),
+        ]
+
+    def wacky_minecart_spiral(self) -> list[str]:
+        return [
+            self.at_target("fill ~-6 ~-1 ~-6 ~6 ~-1 ~6 minecraft:rail replace minecraft:air"),
+            f"effect give {self.target} minecraft:nausea 45 1 true",
+            *self.summon_many("minecart", 24, 5),
+            *self.summon_many("tnt_minecart", 6, 5),
+        ]
+
+    def wacky_creeper_confessional(self) -> list[str]:
+        return [
+            self.at_target("fill ~-3 ~-1 ~-3 ~3 ~4 ~3 minecraft:glass replace minecraft:air"),
+            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
+            f"effect give {self.target} minecraft:weakness 60 4 true",
+            *self.summon_many("creeper", 8, 2, "~", "{powered:1b,Fuse:80}"),
+        ]
+
+    def wacky_powder_snow_smoothie(self) -> list[str]:
+        return [
+            self.at_target("fill ~-6 ~-2 ~-6 ~6 ~5 ~6 minecraft:powder_snow replace minecraft:air"),
+            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
+            f"effect give {self.target} minecraft:slowness 100 4 true",
+            f"effect give {self.target} minecraft:blindness 35 0 true",
+            *self.summon_many("stray", 10, 6),
+        ]
+
+    def wacky_enderman_staring_contest(self) -> list[str]:
+        return [
+            "time set midnight",
+            f"effect give {self.target} minecraft:glowing 120 0 true",
+            f"effect give {self.target} minecraft:blindness 12 0 true",
+            *self.summon_many("enderman", 16, 6),
+            *self.summon_many("endermite", 24, 4),
+        ]
+
+    def wacky_witch_soup_kitchen(self) -> list[str]:
+        return [
+            f"give {self.target} minecraft:suspicious_stew 32",
+            f"effect give {self.target} minecraft:nausea 90 1 true",
+            f"effect give {self.target} minecraft:hunger 160 5 true",
+            *self.summon_many("witch", 12, 8),
+            *self.summon_many("cat", 20, 8),
+        ]
+
+    def wacky_pufferfish_meeting(self) -> list[str]:
+        return [
+            self.at_target("fill ~-5 ~-1 ~-5 ~5 ~4 ~5 minecraft:water replace minecraft:air"),
+            self.at_target("fill ~-5 ~5 ~-5 ~5 ~5 ~5 minecraft:glass replace minecraft:air"),
+            f"effect give {self.target} minecraft:water_breathing 60 0 true",
+            *self.summon_many("pufferfish", 40, 5, "~1"),
+        ]
+
+    def wacky_chicken_ceiling(self) -> list[str]:
+        return [
+            self.at_target("fill ~-5 ~7 ~-5 ~5 ~7 ~5 minecraft:glass replace minecraft:air"),
+            *self.summon_many("chicken", 80, 5, "~8"),
+            *self.summon_many("egg", 80, 5, "~12", "{Motion:[0.0,-1.5,0.0]}"),
+        ]
+
+    def wacky_lava_moat(self) -> list[str]:
+        return [
+            self.at_target("fill ~-10 ~-1 ~-10 ~10 ~1 ~10 minecraft:lava replace minecraft:air"),
+            self.at_target("fill ~-4 ~-1 ~-4 ~4 ~1 ~4 minecraft:air replace minecraft:lava"),
+            self.at_target("fill ~-3 ~-1 ~-3 ~3 ~-1 ~3 minecraft:soul_sand"),
+            f"effect give {self.target} minecraft:jump_boost 45 128 true",
+            *self.summon_many("strider", 12, 8),
+        ]
+
+    def wacky_phantom_airport(self) -> list[str]:
+        return [
+            self.as_target("tp @s ~ ~60 ~"),
+            f"effect give {self.target} minecraft:slow_falling 25 0 true",
+            f"effect give {self.target} minecraft:glowing 80 0 true",
+            *self.summon_many("phantom", 18, 12, "~8"),
+        ]
+
+    def wacky_bee_lawsuit(self) -> list[str]:
+        return [
+            self.at_target("fill ~-6 ~-1 ~-6 ~6 ~4 ~6 minecraft:honey_block replace minecraft:air"),
+            self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
+            f"effect give {self.target} minecraft:slowness 80 5 true",
+            *self.summon_many("bee", 36, 6, "~", "{AngerTime:6000}"),
+        ]
+
+    def wacky_slime_trampoline(self) -> list[str]:
+        return [
+            self.at_target("fill ~-8 ~-1 ~-8 ~8 ~-1 ~8 minecraft:slime_block"),
+            f"effect give {self.target} minecraft:levitation 8 8 true",
+            f"effect give {self.target} minecraft:slow_falling 20 0 true",
+            *self.summon_many("slime", 18, 8, "~", "{Size:8}"),
+        ]
+
+    def wacky_magma_pit(self) -> list[str]:
+        return [
+            self.at_target("fill ~-7 ~-3 ~-7 ~7 ~-1 ~7 minecraft:magma_block"),
+            self.at_target("fill ~-3 ~ ~-3 ~3 ~4 ~3 minecraft:cobweb replace minecraft:air"),
+            f"effect give {self.target} minecraft:fire_resistance 8 0 true",
+            *self.summon_many("magma_cube", 14, 7, "~", "{Size:7}"),
+        ]
+
+    def wacky_cactus_gallery(self) -> list[str]:
+        return [
+            self.at_target("fill ~-9 ~-1 ~-9 ~9 ~-1 ~9 minecraft:sand"),
+            *[self.at_target(f"setblock ~{random.randint(-9, 9)} ~ ~{random.randint(-9, 9)} minecraft:cactus") for _ in range(90)],
+            f"effect give {self.target} minecraft:speed 25 4 true",
+        ]
+
+    def wacky_pumpkin_hr(self) -> list[str]:
+        return [
+            f"item replace entity {self.target} armor.head with minecraft:carved_pumpkin",
+            f"effect give {self.target} minecraft:darkness 80 0 true",
+            f"effect give {self.target} minecraft:nausea 60 1 true",
+            *self.summon_many("armor_stand", 24, 6, "~", "{CustomName:'\"HR Representative\"',NoGravity:1b}"),
+        ]
+
+    def wacky_sampler_platter(self) -> list[str]:
+        return [
+            self.at_target("fill ~-4 ~-1 ~-4 ~4 ~3 ~4 minecraft:cobweb replace minecraft:air"),
+            self.as_target("tp @s ~ ~8 ~"),
+            f"effect give {self.target} minecraft:blindness 25 0 true",
+            f"effect give {self.target} minecraft:hunger 120 4 true",
+            *self.summon_many("creeper", 4, 5, "~", "{powered:1b,Fuse:60}"),
+            *self.summon_many("witch", 4, 5),
+            *self.summon_many("phantom", 5, 8, "~8"),
+            *self.summon_many("tnt", 4, 4, "~2", "{Fuse:50}"),
+        ]
+
 
 def split_chat_message(text: str, limit: int = 220) -> list[str]:
     words = text.split()
@@ -1031,6 +1236,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--chat-poll-seconds", type=float, default=0.5, help="Seconds between chat log polls.")
     parser.add_argument("--questions", type=int, default=100, help="Number of trivia questions to ask.")
     parser.add_argument("--delay-seconds", type=float, default=180.0, help="Seconds to wait between questions.")
+    parser.add_argument("--punishment-mode", choices=("brutal", "wacky"), default="brutal", help="Punishment pool to roll from.")
+    parser.add_argument("--wacky-punishments", action="store_true", help="Shortcut for --punishment-mode wacky.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands instead of connecting to Minecraft.")
     parser.add_argument("--seed", type=int, help="Random seed for repeatable testing.")
     parser.add_argument("--env-file", default=".env", help="Path to .env file containing API keys.")
@@ -1091,6 +1298,8 @@ def check_llm_auth(client: TextGenerator) -> None:
 
 def main() -> int:
     args = parse_args()
+    if args.wacky_punishments:
+        args.punishment_mode = "wacky"
     if args.seed is not None:
         random.seed(args.seed)
     load_dotenv(args.env_file)
@@ -1122,7 +1331,12 @@ def main() -> int:
         print(str(error), file=sys.stderr)
         return 2
 
-    chaos = MinecraftChaos(send_command=send_command, target=args.target, dry_run=args.dry_run)
+    chaos = MinecraftChaos(
+        send_command=send_command,
+        target=args.target,
+        dry_run=args.dry_run,
+        punishment_mode=args.punishment_mode,
+    )
     chat_reader = MinecraftChatReader(
         args.chat_log,
         player=args.answer_player,
@@ -1131,6 +1345,8 @@ def main() -> int:
 
     try:
         chaos.announce("AI trivia chaos is live. Wrong answers roll random punishments.")
+        if args.punishment_mode == "wacky":
+            chaos.announce("Wacky punishments are enabled. Running away is now more of a suggestion.")
         if args.answer_player:
             chaos.announce(f"Only answers from {args.answer_player} will count.")
         else:

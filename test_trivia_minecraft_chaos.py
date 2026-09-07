@@ -56,6 +56,16 @@ class TriviaChaosTests(unittest.TestCase):
         chaos = MinecraftChaos(send_command=lambda command: "", target="@p", dry_run=False)
         self.assertEqual(len(chaos.punishments), 60)
 
+    def test_wacky_punishment_catalog_has_twenty_options(self) -> None:
+        chaos = MinecraftChaos(
+            send_command=lambda command: "",
+            target="@p",
+            dry_run=False,
+            punishment_mode="wacky",
+        )
+        self.assertEqual(len(chaos.punishments), 20)
+        self.assertEqual(chaos.punishment_mode, "wacky")
+
     def test_punishment_multiplier_is_ten(self) -> None:
         self.assertEqual(PUNISHMENT_MULTIPLIER, 10)
         chaos = MinecraftChaos(send_command=lambda command: "", target="@p", dry_run=False)
@@ -63,6 +73,19 @@ class TriviaChaosTests(unittest.TestCase):
 
     def test_all_punishment_factories_return_commands(self) -> None:
         chaos = MinecraftChaos(send_command=lambda command: "", target="@p", dry_run=False)
+        for name, factory in chaos.punishments:
+            with self.subTest(name=name):
+                commands = factory()
+                self.assertTrue(commands)
+                self.assertTrue(all(isinstance(command, str) and command for command in commands))
+
+    def test_all_wacky_punishment_factories_return_commands(self) -> None:
+        chaos = MinecraftChaos(
+            send_command=lambda command: "",
+            target="@p",
+            dry_run=False,
+            punishment_mode="wacky",
+        )
         for name, factory in chaos.punishments:
             with self.subTest(name=name):
                 commands = factory()
@@ -100,6 +123,11 @@ class TriviaChaosTests(unittest.TestCase):
     def test_default_question_count_is_one_hundred(self) -> None:
         args = parse_args([])
         self.assertEqual(args.questions, 100)
+
+    def test_wacky_punishment_flags_are_parsed(self) -> None:
+        args = parse_args(["--punishment-mode", "wacky", "--wacky-punishments"])
+        self.assertEqual(args.punishment_mode, "wacky")
+        self.assertTrue(args.wacky_punishments)
 
     def test_defaults_to_ollama_cloud_and_rcon_password(self) -> None:
         args = parse_args([])
