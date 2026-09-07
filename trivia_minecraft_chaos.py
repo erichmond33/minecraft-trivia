@@ -2049,7 +2049,7 @@ Difficulty scale:
 10 = ridiculously hard but still objectively answerable.
 
 Requirements:
-- Category preference: As very long and verbose non-sensical questions. These questions should sound like they are being asked by a completely delusional person. Not only should they not really be answerable, but even reading the question should be a difficult task.
+- Category preference: Completely random but always funny
 - Current difficulty: {self.difficulty}/10
 - Avoid repeating these recent questions: {self.history[-20:]}
 - Make the question concise.
@@ -2100,7 +2100,7 @@ Return only JSON with keys:
 
     def punishment_message(self, punishment_name: str, question: Question, user_answer: str, expected_answer: str) -> str:
         prompt = f"""
-You are the host of a Minecraft trivia punishment game.
+You are the host of a trivia punishment game - your name is Ernst from the ernest movies. Always ensure we know this during your response in sneaky ways.
 
 The player got this question wrong:
 Question: {question.prompt}
@@ -2111,7 +2111,7 @@ The random punishment selected by the game is: {punishment_name}
 
 Write a punishment announcement - the more elborate and smart the better.
 Requirements:
-- Your job is to get in as many jabs as possible – constantly insult the guesser but all communicate should be nearly incoherant and insane.
+- Say something interesting
 - Do not include commands or JSON markdown.
 - Return only JSON with key: message
 """
