@@ -1315,7 +1315,7 @@ Difficulty scale:
 10 = ridiculously hard but still objectively answerable.
 
 Requirements:
-- Category preference: {self.category}
+- Category preference: Modern internet culture – for example questions about EDP445, boogie2988, Penginzero, the vanoss crew, dr. disrespect, anything a chronically online discord person might know about.
 - Current difficulty: {self.difficulty}/10
 - Avoid repeating these recent questions: {self.history[-12:]}
 - Make the question concise.
@@ -1349,10 +1349,10 @@ Player answer: {user_answer}
 
 Judge generously for spelling, capitalization, abbreviations, and equivalent wording.
 Do not accept a joke answer, contradiction, or answer that is merely related.
-Write the message in a playful, snarky voice. Keep it short, Minecraft-chat friendly, and not genuinely cruel.
+Write the message in a snarky voice. Match the tone and vulgarity of the person asking the questions. It's okay to deny the correctness of an answer if the answer is too sassy.
 Return only JSON with keys:
 - correct: boolean
-- message: one short snarky sentence for the player that clearly says whether they were correct
+- message: a response for the player that clearly says whether they were correct
 - expected_answer: the canonical correct answer
 """
         try:
