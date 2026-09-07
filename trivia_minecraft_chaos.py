@@ -146,7 +146,7 @@ def get_gemini_key() -> str | None:
     for key_name in ("GEMINI_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
         value = os.environ.get(key_name)
         if value:
-            return value
+            return normalize_api_key(value)
     return None
 
 
@@ -154,8 +154,15 @@ def get_ollama_key() -> str | None:
     for key_name in ("OLLAMA_API_KEY", "OLLAMA_KEY"):
         value = os.environ.get(key_name)
         if value:
-            return value
+            return normalize_api_key(value)
     return None
+
+
+def normalize_api_key(value: str) -> str:
+    cleaned = value.strip().strip('"').strip("'")
+    if cleaned.lower().startswith("bearer "):
+        return cleaned[7:].strip()
+    return cleaned
 
 
 def extract_json_object(text: str) -> dict[str, object]:
@@ -275,6 +282,12 @@ class OllamaCloudClient:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
+            if error.code == 401:
+                raise RuntimeError(
+                    "Ollama rejected the API key with HTTP 401. Check that OLLAMA_API_KEY "
+                    "is an Ollama Cloud API key from ollama.com, not a Gemini key, and that "
+                    "it has no extra quotes, spaces, or label text."
+                ) from error
             raise RuntimeError(f"Ollama HTTP {error.code}: {body[:400]}") from error
         except urllib.error.URLError as error:
             reason = str(error.reason)
@@ -290,6 +303,19 @@ class OllamaCloudClient:
             return str(data["message"]["content"])
         except (KeyError, TypeError) as error:
             raise RuntimeError(f"Unexpected Ollama response: {json.dumps(data)[:400]}") from error
+
+    def check_auth(self) -> None:
+        try:
+            self.generate('Return only JSON: {"ok": true}')
+        except RuntimeError as error:
+            message = str(error)
+            if "HTTP 401" in message:
+                raise RuntimeError(
+                    "Ollama rejected OLLAMA_API_KEY on /api/chat. Generate a fresh Ollama "
+                    "Cloud API key at ollama.com, then put exactly that token in .env as "
+                    "OLLAMA_API_KEY=... . Do not reuse your Gemini key."
+                ) from error
+            raise
 
     def _ssl_context(self) -> ssl.SSLContext:
         if self.insecure_skip_verify:
@@ -951,6 +977,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, help="Random seed for repeatable testing.")
     parser.add_argument("--env-file", default=".env", help="Path to .env file containing GEMINI_KEY.")
     parser.add_argument("--llm-provider", choices=("gemini", "ollama"), default="gemini", help="LLM provider for live questions and judging.")
+    parser.add_argument("--check-llm-auth", action="store_true", help="Check the selected LLM credentials and exit.")
     parser.add_argument("--llm-ca-file", help="Path to a CA bundle if Python cannot verify HTTPS certificates.")
     parser.add_argument("--llm-insecure-skip-verify", action="store_true", help="Disable LLM HTTPS certificate verification for local testing.")
     parser.add_argument("--gemini-model", default="gemini-3.7-flash", help="Gemini model used for question generation and judging.")
@@ -998,6 +1025,13 @@ def make_llm_client(args: argparse.Namespace) -> TextGenerator:
     )
 
 
+def check_llm_auth(client: TextGenerator) -> None:
+    if isinstance(client, OllamaCloudClient):
+        client.check_auth()
+        return
+    client.generate('Return only JSON: {"ok": true}')
+
+
 def main() -> int:
     args = parse_args()
     if args.seed is not None:
@@ -1012,6 +1046,14 @@ def main() -> int:
         except RuntimeError as error:
             print(str(error), file=sys.stderr)
             return 2
+        if args.check_llm_auth:
+            try:
+                check_llm_auth(llm_client)
+            except RuntimeError as error:
+                print(str(error), file=sys.stderr)
+                return 2
+            print(f"{args.llm_provider} auth check passed.")
+            return 0
         agent = LlmTriviaAgent(llm_client, category=args.category)
 
     try:

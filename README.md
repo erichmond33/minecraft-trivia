@@ -66,6 +66,12 @@ Run against a local server with Ollama Cloud:
 python3 trivia_minecraft_chaos.py --llm-provider ollama --ollama-model gpt-oss:120b --password change-this-password --target @a
 ```
 
+Check Ollama Cloud auth before starting the game:
+
+```bash
+python3 trivia_minecraft_chaos.py --llm-provider ollama --check-llm-auth --llm-insecure-skip-verify
+```
+
 Run with local Ollama:
 
 ```bash

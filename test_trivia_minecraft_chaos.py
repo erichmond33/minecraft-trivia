@@ -9,6 +9,7 @@ from trivia_minecraft_chaos import (
     OllamaCloudClient,
     LOCAL_QUESTION_BANK,
     answer_matches,
+    normalize_api_key,
     parse_args,
     parse_chat_log_line,
 )
@@ -83,10 +84,25 @@ class TriviaChaosTests(unittest.TestCase):
         self.assertTrue(args.gemini_insecure_skip_verify)
 
     def test_ollama_flags_are_parsed(self) -> None:
-        args = parse_args(["--llm-provider", "ollama", "--ollama-model", "gpt-oss:120b", "--ollama-host", "http://localhost:11434"])
+        args = parse_args(
+            [
+                "--llm-provider",
+                "ollama",
+                "--ollama-model",
+                "gpt-oss:120b",
+                "--ollama-host",
+                "http://localhost:11434",
+                "--check-llm-auth",
+            ]
+        )
         self.assertEqual(args.llm_provider, "ollama")
         self.assertEqual(args.ollama_model, "gpt-oss:120b")
         self.assertEqual(args.ollama_host, "http://localhost:11434")
+        self.assertTrue(args.check_llm_auth)
+
+    def test_normalize_api_key_strips_bearer_prefix(self) -> None:
+        self.assertEqual(normalize_api_key("Bearer abc123"), "abc123")
+        self.assertEqual(normalize_api_key('"abc123"'), "abc123")
 
     def test_gemini_client_can_build_unverified_ssl_context(self) -> None:
         client = GeminiClient("key", "model", insecure_skip_verify=True)
