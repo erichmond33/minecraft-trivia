@@ -28,6 +28,7 @@ SERVERDATA_AUTH_RESPONSE = 2
 SERVERDATA_EXECCOMMAND = 2
 SERVERDATA_RESPONSE_VALUE = 0
 STARTING_DIFFICULTY = 4
+PUNISHMENT_MULTIPLIER = 10
 
 
 HOSTILE_MOBS = [
@@ -482,7 +483,7 @@ class MinecraftChaos:
         self.target = target
         self.dry_run = dry_run
         self.wrong_answers = 0
-        self.mob_wave_size = 2
+        self.mob_wave_size = 2 * PUNISHMENT_MULTIPLIER
         self.punishments: list[tuple[str, Callable[[], list[str]]]] = [
             ("Duplicate nearby hostile mobs", self.duplicate_nearby_hostiles),
             ("Twenty creepers, because subtlety is gone", self.twenty_creepers),
@@ -583,12 +584,19 @@ class MinecraftChaos:
     def as_target(self, command: str) -> str:
         return f"execute as {self.target} at @s run {command}"
 
+    def scaled_count(self, count: int) -> int:
+        return count * PUNISHMENT_MULTIPLIER
+
+    def scaled_radius(self, radius: int) -> int:
+        return max(radius + PUNISHMENT_MULTIPLIER, radius * 2)
+
     def summon_many(self, entity: str, count: int, radius: int = 6, y: str = "~", nbt: str = "") -> list[str]:
+        scaled_radius = self.scaled_radius(radius)
         return [
             self.at_target(
-                f"summon minecraft:{entity} ~{random.randint(-radius, radius)} {y} ~{random.randint(-radius, radius)} {nbt}".strip()
+                f"summon minecraft:{entity} ~{random.randint(-scaled_radius, scaled_radius)} {y} ~{random.randint(-scaled_radius, scaled_radius)} {nbt}".strip()
             )
-            for _ in range(count)
+            for _ in range(self.scaled_count(count))
         ]
 
     def fill_nearby(self, xz_radius: int, y1: int, y2: int, block: str, replace: str | None = None) -> str:
@@ -599,94 +607,102 @@ class MinecraftChaos:
 
     def duplicate_nearby_hostiles(self) -> list[str]:
         count = self.mob_wave_size
-        self.mob_wave_size = min(self.mob_wave_size * 2, 64)
+        self.mob_wave_size = min(self.mob_wave_size * 2, 64 * PUNISHMENT_MULTIPLIER)
         mob = random.choice(HOSTILE_MOBS)
         duplicate_commands = [
-            f"execute at {self.target} as @e[type=minecraft:{mob_type},distance=..24,limit=32] at @s run summon minecraft:{mob_type} ~ ~ ~"
+            f"execute at {self.target} as @e[type=minecraft:{mob_type},distance=..64,limit=320] at @s run summon minecraft:{mob_type} ~ ~ ~"
             for mob_type in HOSTILE_MOBS
         ]
         escalating_wave = [
-            self.at_target(f"summon minecraft:{mob} ~{random.randint(-6, 6)} ~ ~{random.randint(-6, 6)}")
+            self.at_target(f"summon minecraft:{mob} ~{random.randint(-16, 16)} ~ ~{random.randint(-16, 16)}")
             for _ in range(count)
         ]
         return duplicate_commands + escalating_wave
 
     def twenty_creepers(self) -> list[str]:
-        return [self.at_target(f"summon minecraft:creeper ~{random.randint(-8, 8)} ~ ~{random.randint(-8, 8)}") for _ in range(20)]
+        return [self.at_target(f"summon minecraft:creeper ~{random.randint(-18, 18)} ~ ~{random.randint(-18, 18)}") for _ in range(200)]
 
     def lightning_ring(self) -> list[str]:
         offsets = [(-5, 0), (5, 0), (0, -5), (0, 5), (-4, -4), (4, 4), (-4, 4), (4, -4)]
-        return [self.at_target(f"summon minecraft:lightning_bolt ~{x} ~ ~{z}") for x, z in offsets]
+        return [self.at_target(f"summon minecraft:lightning_bolt ~{x * 2} ~ ~{z * 2}") for _ in range(PUNISHMENT_MULTIPLIER) for x, z in offsets]
 
     def anvil_rain(self) -> list[str]:
-        return [self.at_target(f"setblock ~{random.randint(-3, 3)} ~12 ~{random.randint(-3, 3)} minecraft:anvil") for _ in range(12)]
+        return [self.at_target(f"setblock ~{random.randint(-12, 12)} ~24 ~{random.randint(-12, 12)} minecraft:anvil") for _ in range(120)]
 
     def silverfish_confetti(self) -> list[str]:
-        return [self.at_target(f"summon minecraft:silverfish ~{random.randint(-4, 4)} ~ ~{random.randint(-4, 4)}") for _ in range(18)]
+        return self.summon_many("silverfish", 18, 4)
 
     def clumsy_curse(self) -> list[str]:
         return [
-            f"effect give {self.target} minecraft:slowness 20 2 true",
-            f"effect give {self.target} minecraft:mining_fatigue 20 2 true",
+            f"effect give {self.target} minecraft:slowness 200 5 true",
+            f"effect give {self.target} minecraft:mining_fatigue 200 5 true",
         ]
 
     def floor_is_lava(self) -> list[str]:
         return [
-            self.at_target("fill ~-2 ~-1 ~-2 ~2 ~-1 ~2 minecraft:lava replace minecraft:air"),
-            self.at_target("fill ~-2 ~-1 ~-2 ~2 ~-1 ~2 minecraft:magma_block replace minecraft:grass_block"),
+            self.at_target("fill ~-8 ~-1 ~-8 ~8 ~-1 ~8 minecraft:lava replace minecraft:air"),
+            self.at_target("fill ~-8 ~-1 ~-8 ~8 ~-1 ~8 minecraft:magma_block replace minecraft:grass_block"),
         ]
 
     def pumpkin_helmet(self) -> list[str]:
-        return [f"item replace entity {self.target} armor.head with minecraft:carved_pumpkin"]
+        return [
+            f"item replace entity {self.target} armor.head with minecraft:carved_pumpkin",
+            f"effect give {self.target} minecraft:blindness 60 0 true",
+            f"effect give {self.target} minecraft:darkness 60 0 true",
+        ]
 
     def launch_player(self) -> list[str]:
         return [
-            self.as_target("tp @s ~ ~18 ~"),
-            f"effect give {self.target} minecraft:slow_falling 8 0 true",
+            self.as_target("tp @s ~ ~120 ~"),
+            f"effect give {self.target} minecraft:slow_falling 4 0 true",
         ]
 
     def angry_bees(self) -> list[str]:
-        return [self.at_target(f"summon minecraft:bee ~{random.randint(-4, 4)} ~ ~{random.randint(-4, 4)} {{AngerTime:600}}") for _ in range(12)]
+        return self.summon_many("bee", 12, 4, "~", "{AngerTime:6000}")
 
     def cave_spiders(self) -> list[str]:
-        return [self.at_target(f"summon minecraft:cave_spider ~{random.randint(-5, 5)} ~ ~{random.randint(-5, 5)}") for _ in range(10)]
+        return self.summon_many("cave_spider", 10, 5)
 
     def witches(self) -> list[str]:
-        return [self.at_target(f"summon minecraft:witch ~{random.randint(-6, 6)} ~ ~{random.randint(-6, 6)}") for _ in range(4)]
+        return self.summon_many("witch", 4, 6)
 
     def blindness(self) -> list[str]:
         return [
-            f"effect give {self.target} minecraft:blindness 12 0 true",
-            f"effect give {self.target} minecraft:darkness 12 0 true",
+            f"effect give {self.target} minecraft:blindness 120 0 true",
+            f"effect give {self.target} minecraft:darkness 120 0 true",
         ]
 
     def phantoms(self) -> list[str]:
-        return [self.at_target(f"summon minecraft:phantom ~{random.randint(-8, 8)} ~8 ~{random.randint(-8, 8)}") for _ in range(6)]
+        return self.summon_many("phantom", 6, 8, "~16")
 
     def ghast(self) -> list[str]:
-        return [self.at_target("summon minecraft:ghast ~ ~8 ~")]
+        return self.summon_many("ghast", 3, 12, "~16")
 
     def tnt_cough(self) -> list[str]:
-        return [self.at_target(f"summon minecraft:tnt ~{random.randint(-3, 3)} ~1 ~{random.randint(-3, 3)} {{Fuse:60}}") for _ in range(5)]
+        return self.summon_many("tnt", 5, 6, "~2", "{Fuse:30}")
 
     def chicken_jockey(self) -> list[str]:
-        return [self.at_target("summon minecraft:chicken ~ ~ ~ {Passengers:[{id:\"minecraft:zombie\",IsBaby:1b}]}") for _ in range(5)]
+        return [self.at_target("summon minecraft:chicken ~ ~ ~ {Passengers:[{id:\"minecraft:zombie\",IsBaby:1b}]}") for _ in range(50)]
 
     def snowball_storm(self) -> list[str]:
-        return [self.at_target(f"summon minecraft:snowball ~{random.randint(-5, 5)} ~5 ~{random.randint(-5, 5)}") for _ in range(24)]
+        return self.summon_many("snowball", 24, 5, "~10", "{Motion:[0.0,-1.0,0.0]}")
 
     def suspicious_stew(self) -> list[str]:
-        return [f"give {self.target} minecraft:suspicious_stew 1"]
+        return [
+            f"give {self.target} minecraft:suspicious_stew 10",
+            f"effect give {self.target} minecraft:nausea 60 1 true",
+            f"effect give {self.target} minecraft:hunger 120 5 true",
+        ]
 
     def chunk_bite(self) -> list[str]:
         return [
-            self.at_target("fill ~-3 ~-2 ~-3 ~3 ~3 ~3 minecraft:air replace minecraft:stone"),
-            self.at_target("fill ~-3 ~-2 ~-3 ~3 ~3 ~3 minecraft:air replace minecraft:dirt"),
-            self.at_target("fill ~-3 ~-2 ~-3 ~3 ~3 ~3 minecraft:air replace minecraft:deepslate"),
+            self.at_target("fill ~-10 ~-8 ~-10 ~10 ~8 ~10 minecraft:air replace minecraft:stone"),
+            self.at_target("fill ~-10 ~-8 ~-10 ~10 ~8 ~10 minecraft:air replace minecraft:dirt"),
+            self.at_target("fill ~-10 ~-8 ~-10 ~10 ~8 ~10 minecraft:air replace minecraft:deepslate"),
         ]
 
     def charged_creepers(self) -> list[str]:
-        return self.summon_many("creeper", 6, 7, "~", "{powered:1b,Fuse:50}")
+        return self.summon_many("creeper", 6, 7, "~", "{powered:1b,Fuse:25}")
 
     def zombie_party(self) -> list[str]:
         return self.summon_many("zombie", 24, 8)
@@ -707,10 +723,10 @@ class MinecraftChaos:
         return self.summon_many("blaze", 8, 7)
 
     def magma_cubes(self) -> list[str]:
-        return self.summon_many("magma_cube", 8, 7, "~", "{Size:3}")
+        return self.summon_many("magma_cube", 8, 7, "~", "{Size:6}")
 
     def slimes(self) -> list[str]:
-        return self.summon_many("slime", 10, 7, "~", "{Size:3}")
+        return self.summon_many("slime", 10, 7, "~", "{Size:6}")
 
     def endermites(self) -> list[str]:
         return self.summon_many("endermite", 20, 5)
@@ -725,101 +741,110 @@ class MinecraftChaos:
         return self.summon_many("guardian", 5, 6)
 
     def elder_guardian_curse(self) -> list[str]:
-        return [f"effect give {self.target} minecraft:mining_fatigue 60 3 true"]
+        return [
+            f"effect give {self.target} minecraft:mining_fatigue 600 5 true",
+            f"effect give {self.target} minecraft:slowness 120 3 true",
+        ]
 
     def arrow_rain(self) -> list[str]:
-        return self.summon_many("arrow", 30, 5, "~10", "{Motion:[0.0,-1.2,0.0]}")
+        return self.summon_many("arrow", 30, 8, "~22", "{Motion:[0.0,-2.0,0.0]}")
 
     def trident_rain(self) -> list[str]:
-        return self.summon_many("trident", 12, 5, "~10", "{Motion:[0.0,-1.3,0.0]}")
+        return self.summon_many("trident", 12, 8, "~22", "{Motion:[0.0,-2.1,0.0]}")
 
     def egg_storm(self) -> list[str]:
-        return self.summon_many("egg", 28, 5, "~5", "{Motion:[0.0,-0.8,0.0]}")
+        return self.summon_many("egg", 28, 8, "~12", "{Motion:[0.0,-1.4,0.0]}")
 
     def chicken_flood(self) -> list[str]:
         return self.summon_many("chicken", 32, 8)
 
     def bats(self) -> list[str]:
-        return self.summon_many("bat", 28, 5, "~2")
+        return self.summon_many("bat", 28, 10, "~4")
 
     def rabbits(self) -> list[str]:
         return self.summon_many("rabbit", 18, 7)
 
     def cod_flop(self) -> list[str]:
-        return self.summon_many("cod", 18, 5, "~1")
+        return self.summon_many("cod", 18, 10, "~2")
 
     def goats(self) -> list[str]:
         return self.summon_many("goat", 8, 7)
 
     def cobweb_trap(self) -> list[str]:
-        return [self.fill_nearby(2, 0, 2, "cobweb", "air")]
+        return [self.fill_nearby(8, 0, 5, "cobweb", "air")]
 
     def ice_prison(self) -> list[str]:
         return [
-            self.fill_nearby(2, -1, 3, "packed_ice", "air"),
+            self.fill_nearby(5, -2, 7, "packed_ice", "air"),
             self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
         ]
 
     def glass_box(self) -> list[str]:
         return [
-            self.fill_nearby(2, -1, 3, "glass", "air"),
+            self.fill_nearby(5, -2, 7, "glass", "air"),
             self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
         ]
 
     def dirt_box(self) -> list[str]:
         return [
-            self.fill_nearby(2, -1, 3, "dirt", "air"),
+            self.fill_nearby(5, -2, 7, "dirt", "air"),
             self.at_target("fill ~-1 ~ ~-1 ~1 ~2 ~1 minecraft:air"),
         ]
 
     def water_cube(self) -> list[str]:
-        return [self.fill_nearby(2, 0, 2, "water", "air")]
+        return [self.fill_nearby(7, 0, 5, "water", "air")]
 
     def lava_moat(self) -> list[str]:
         return [
-            self.at_target("fill ~-4 ~-1 ~-4 ~4 ~-1 ~4 minecraft:lava replace minecraft:air"),
-            self.at_target("fill ~-2 ~-1 ~-2 ~2 ~-1 ~2 minecraft:air replace minecraft:lava"),
+            self.at_target("fill ~-12 ~-1 ~-12 ~12 ~0 ~12 minecraft:lava replace minecraft:air"),
+            self.at_target("fill ~-3 ~-1 ~-3 ~3 ~0 ~3 minecraft:air replace minecraft:lava"),
         ]
 
     def powder_snow(self) -> list[str]:
-        return [self.fill_nearby(2, 0, 2, "powder_snow", "air")]
+        return [self.fill_nearby(7, 0, 5, "powder_snow", "air")]
 
     def soul_sand_field(self) -> list[str]:
-        return [self.fill_nearby(4, -1, -1, "soul_sand")]
+        return [self.fill_nearby(12, -1, -1, "soul_sand")]
 
     def cactus_circle(self) -> list[str]:
         offsets = [(-3, 0), (3, 0), (0, -3), (0, 3), (-2, -2), (2, 2), (-2, 2), (2, -2)]
-        return [self.at_target(f"setblock ~{x} ~ ~{z} minecraft:cactus") for x, z in offsets]
+        return [self.at_target(f"setblock ~{x * 3} ~ ~{z * 3} minecraft:cactus") for _ in range(PUNISHMENT_MULTIPLIER) for x, z in offsets]
 
     def berry_bushes(self) -> list[str]:
-        return [self.at_target(f"setblock ~{random.randint(-3, 3)} ~ ~{random.randint(-3, 3)} minecraft:sweet_berry_bush") for _ in range(16)]
+        return [self.at_target(f"setblock ~{random.randint(-12, 12)} ~ ~{random.randint(-12, 12)} minecraft:sweet_berry_bush") for _ in range(160)]
 
     def hunger(self) -> list[str]:
-        return [f"effect give {self.target} minecraft:hunger 35 3 true"]
+        return [f"effect give {self.target} minecraft:hunger 350 5 true"]
 
     def poison(self) -> list[str]:
-        return [f"effect give {self.target} minecraft:poison 12 1 true"]
+        return [f"effect give {self.target} minecraft:poison 120 2 true"]
 
     def wither_warning(self) -> list[str]:
-        return [f"effect give {self.target} minecraft:wither 8 0 true"]
+        return [f"effect give {self.target} minecraft:wither 80 1 true"]
 
     def levitation(self) -> list[str]:
         return [
-            f"effect give {self.target} minecraft:levitation 6 1 true",
-            f"effect give {self.target} minecraft:slow_falling 10 0 true",
+            f"effect give {self.target} minecraft:levitation 20 5 true",
+            f"effect give {self.target} minecraft:slow_falling 4 0 true",
         ]
 
     def glowing(self) -> list[str]:
-        return [f"effect give {self.target} minecraft:glowing 60 0 true"]
+        return [
+            f"effect give {self.target} minecraft:glowing 600 0 true",
+            f"effect give {self.target} minecraft:weakness 120 2 true",
+        ]
 
     def thunderstorm(self) -> list[str]:
-        return ["weather thunder 45"]
+        return ["weather thunder 600"]
 
     def night_shift(self) -> list[str]:
         return ["time set midnight"]
 
     def rotten_flesh(self) -> list[str]:
-        return [f"give {self.target} minecraft:rotten_flesh 16"]
+        return [
+            f"give {self.target} minecraft:rotten_flesh 160",
+            f"effect give {self.target} minecraft:hunger 160 4 true",
+        ]
 
 
 def split_chat_message(text: str, limit: int = 220) -> list[str]:

@@ -8,6 +8,7 @@ from trivia_minecraft_chaos import (
     MinecraftChaos,
     OllamaCloudClient,
     LOCAL_QUESTION_BANK,
+    PUNISHMENT_MULTIPLIER,
     answer_matches,
     normalize_api_key,
     parse_args,
@@ -54,6 +55,11 @@ class TriviaChaosTests(unittest.TestCase):
     def test_punishment_catalog_has_sixty_options(self) -> None:
         chaos = MinecraftChaos(send_command=lambda command: "", target="@p", dry_run=False)
         self.assertEqual(len(chaos.punishments), 60)
+
+    def test_punishment_multiplier_is_ten(self) -> None:
+        self.assertEqual(PUNISHMENT_MULTIPLIER, 10)
+        chaos = MinecraftChaos(send_command=lambda command: "", target="@p", dry_run=False)
+        self.assertEqual(len(chaos.zombie_party()), 24 * PUNISHMENT_MULTIPLIER)
 
     def test_all_punishment_factories_return_commands(self) -> None:
         chaos = MinecraftChaos(send_command=lambda command: "", target="@p", dry_run=False)
